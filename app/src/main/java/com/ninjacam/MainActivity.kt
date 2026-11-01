@@ -7,8 +7,11 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
@@ -47,10 +50,20 @@ class MainActivity : ComponentActivity() {
     private lateinit var shutterButton: Button
     private lateinit var modeButton: Button
     private lateinit var switchButton: ImageButton
+    private lateinit var galleryButton: Button
+
+    private lateinit var flashButton: Button
+    private lateinit var hdrButton: Button
+    private lateinit var timerButton: Button
+    private lateinit var settingsButton: Button
+
     private lateinit var zoomSlider: SeekBar
     private lateinit var zoomText: TextView
     private lateinit var zoomButtonsLayout: LinearLayout
     private lateinit var bottomPanel: LinearLayout
+    private lateinit var modeRow: LinearLayout
+
+    private lateinit var gridOverlay: GridOverlay
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
@@ -64,6 +77,11 @@ class MainActivity : ComponentActivity() {
     private var isAstroMode = false
     private var isCameraReady = false
     private var isRecording = false
+
+    private var flashMode = ImageCapture.FLASH_MODE_AUTO
+    private var hdrEnabled = false
+    private var gridEnabled = false
+    private var timerSeconds = 0
 
     private val quickZoomButtons = mutableListOf<Button>()
 
@@ -127,59 +145,97 @@ class MainActivity : ComponentActivity() {
             )
         )
 
+        gridOverlay = GridOverlay(this)
+
+        root.addView(
+            gridOverlay,
+            FrameLayout.LayoutParams(
+                -1,
+                -1
+            )
+        )
+
+        /*
+         * TOP BAR
+         */
+
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(18, 18, 18, 10)
+            setPadding(16, 18, 16, 8)
         }
 
         statusText = TextView(this).apply {
             text = "NINJACAM • PHOTO"
-            textSize = 17f
+            textSize = 16f
             setTextColor(Color.WHITE)
+            setShadowLayer(
+                6f,
+                0f,
+                2f,
+                Color.BLACK
+            )
         }
 
         topBar.addView(
             statusText,
             LinearLayout.LayoutParams(
                 0,
-                55,
+                52,
                 1f
             )
         )
 
-        switchButton = ImageButton(this).apply {
+        flashButton = topButton("⚡ AUTO") {
+            cycleFlash()
+        }
 
-            setImageResource(
-                android.R.drawable.ic_menu_camera
+        hdrButton = topButton("HDR") {
+            hdrEnabled = !hdrEnabled
+            hdrButton.text =
+                if (hdrEnabled) {
+                    "HDR ON"
+                } else {
+                    "HDR"
+                }
+
+            showMessage(
+                if (hdrEnabled) {
+                    "HDR diaktifkan"
+                } else {
+                    "HDR dimatikan"
+                }
             )
+        }
 
-            setColorFilter(Color.WHITE)
+        timerButton = topButton("TIMER") {
+            cycleTimer()
+        }
 
-            background = roundBackground(
-                Color.argb(115, 0, 0, 0),
-                999f
-            )
-
-            contentDescription = "Ganti kamera"
-
-            setPadding(
-                14,
-                14,
-                14,
-                14
-            )
-
-            setOnClickListener {
-                switchCamera()
-            }
+        settingsButton = topButton("⚙") {
+            showMessage("Settings akan masuk di Full v1")
         }
 
         topBar.addView(
-            switchButton,
+            flashButton,
+            topSmallParams()
+        )
+
+        topBar.addView(
+            hdrButton,
+            topSmallParams()
+        )
+
+        topBar.addView(
+            timerButton,
+            topSmallParams()
+        )
+
+        topBar.addView(
+            settingsButton,
             LinearLayout.LayoutParams(
-                52,
-                52
+                48,
+                44
             )
         )
 
@@ -192,37 +248,80 @@ class MainActivity : ComponentActivity() {
             )
         )
 
+        /*
+         * CENTER ZOOM INDICATOR
+         */
+
+        zoomText = TextView(this).apply {
+            text = "1.0×"
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = roundBackground(
+                Color.argb(100, 0, 0, 0),
+                999f
+            )
+            setPadding(
+                16,
+                4,
+                16,
+                4
+            )
+        }
+
+        root.addView(
+            zoomText,
+            FrameLayout.LayoutParams(
+                82,
+                42,
+                Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
+            ).apply {
+                topMargin = 65
+            }
+        )
+
+        /*
+         * BOTTOM PANEL
+         */
+
         bottomPanel = LinearLayout(this).apply {
 
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
 
             setPadding(
-                18,
-                12,
-                18,
-                24
+                14,
+                10,
+                14,
+                18
             )
 
             background = roundBackground(
-                Color.argb(155, 0, 0, 0),
-                34f
+                Color.argb(145, 0, 0, 0),
+                32f
             )
         }
 
-        zoomText = TextView(this).apply {
-
-            text = "1.0×"
-            textSize = 16f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-        }
+        /*
+         * ZOOM BUTTONS
+         */
 
         zoomButtonsLayout = LinearLayout(this).apply {
-
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
+
+        bottomPanel.addView(
+            zoomButtonsLayout,
+            LinearLayout.LayoutParams(
+                -1,
+                46
+            )
+        )
+
+        /*
+         * ZOOM SLIDER
+         */
 
         zoomSlider = SeekBar(this).apply {
 
@@ -230,8 +329,7 @@ class MainActivity : ComponentActivity() {
             progress = 0
 
             setOnSeekBarChangeListener(
-                object :
-                    SeekBar.OnSeekBarChangeListener {
+                object : SeekBar.OnSeekBarChangeListener {
 
                     override fun onProgressChanged(
                         seekBar: SeekBar?,
@@ -256,34 +354,104 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        modeButton = Button(this).apply {
+        bottomPanel.addView(
+            zoomSlider,
+            LinearLayout.LayoutParams(
+                -1,
+                36
+            )
+        )
 
-            text = "PHOTO"
-            textSize = 13f
+        /*
+         * MODE ROW
+         */
+
+        modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+
+        val photoMode =
+            modeChip("PHOTO") {
+                setPhotoMode()
+            }
+
+        val videoMode =
+            modeChip("VIDEO") {
+                setVideoMode()
+            }
+
+        val nightMode =
+            modeChip("NIGHT") {
+                showMessage("Night Mode akan diproses di tahap berikutnya")
+            }
+
+        val astroMode =
+            modeChip("ASTRO") {
+                setAstroMode()
+            }
+
+        val proMode =
+            modeChip("PRO") {
+                showMessage("Pro Controls akan masuk di tahap berikutnya")
+            }
+
+        val liveMode =
+            modeChip("LIVE") {
+                showMessage("Live Photo akan masuk di tahap berikutnya")
+            }
+
+        modeRow.addView(photoMode)
+        modeRow.addView(videoMode)
+        modeRow.addView(nightMode)
+        modeRow.addView(astroMode)
+        modeRow.addView(proMode)
+        modeRow.addView(liveMode)
+
+        bottomPanel.addView(
+            modeRow,
+            LinearLayout.LayoutParams(
+                -1,
+                48
+            )
+        )
+
+        /*
+         * SHUTTER ROW
+         */
+
+        val shutterRow = FrameLayout(this)
+
+        galleryButton = Button(this).apply {
+
+            text = "▣"
+            textSize = 22f
             setTextColor(Color.WHITE)
 
             background = roundBackground(
-                Color.argb(105, 255, 255, 255),
+                Color.argb(110, 255, 255, 255),
                 999f
             )
 
-            setPadding(
-                28,
-                0,
-                28,
-                0
-            )
-
             setOnClickListener {
-                cycleMode()
+                showMessage("Gallery NinjaCam")
             }
         }
+
+        shutterRow.addView(
+            galleryButton,
+            FrameLayout.LayoutParams(
+                58,
+                58,
+                Gravity.START or Gravity.CENTER_VERTICAL
+            )
+        )
 
         shutterButton = Button(this).apply {
 
             text = "●"
             textSize = 27f
-            setTextColor(Color.WHITE)
+            setTextColor(Color.BLACK)
 
             background = shutterBackground()
 
@@ -291,42 +459,6 @@ class MainActivity : ComponentActivity() {
                 onShutterPressed()
             }
         }
-
-        bottomPanel.addView(
-            zoomText,
-            LinearLayout.LayoutParams(
-                -1,
-                32
-            )
-        )
-
-        bottomPanel.addView(
-            zoomButtonsLayout,
-            LinearLayout.LayoutParams(
-                -1,
-                46
-            )
-        )
-
-        bottomPanel.addView(
-            zoomSlider,
-            LinearLayout.LayoutParams(
-                -1,
-                42
-            )
-        )
-
-        bottomPanel.addView(
-            modeButton,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                48
-            ).apply {
-                gravity = Gravity.CENTER
-            }
-        )
-
-        val shutterRow = FrameLayout(this)
 
         shutterRow.addView(
             shutterButton,
@@ -337,11 +469,48 @@ class MainActivity : ComponentActivity() {
             )
         )
 
+        switchButton = ImageButton(this).apply {
+
+            setImageResource(
+                android.R.drawable.ic_menu_camera
+            )
+
+            setColorFilter(Color.WHITE)
+
+            background = roundBackground(
+                Color.argb(110, 255, 255, 255),
+                999f
+            )
+
+            contentDescription =
+                "Ganti kamera"
+
+            setPadding(
+                14,
+                14,
+                14,
+                14
+            )
+
+            setOnClickListener {
+                switchCamera()
+            }
+        }
+
+        shutterRow.addView(
+            switchButton,
+            FrameLayout.LayoutParams(
+                58,
+                58,
+                Gravity.END or Gravity.CENTER_VERTICAL
+            )
+        )
+
         bottomPanel.addView(
             shutterRow,
             LinearLayout.LayoutParams(
                 -1,
-                92
+                94
             )
         )
 
@@ -353,10 +522,10 @@ class MainActivity : ComponentActivity() {
                 Gravity.BOTTOM
             ).apply {
                 setMargins(
-                    10,
+                    8,
                     0,
-                    10,
-                    10
+                    8,
+                    8
                 )
             }
         )
@@ -364,6 +533,104 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
 
         createQuickZoomButtons()
+    }
+
+    private fun topButton(
+        textValue: String,
+        action: () -> Unit
+    ): Button {
+
+        return Button(this).apply {
+
+            text = textValue
+            textSize = 10f
+            setTextColor(Color.WHITE)
+
+            background = roundBackground(
+                Color.argb(
+                    105,
+                    0,
+                    0,
+                    0
+                ),
+                999f
+            )
+
+            setPadding(
+                8,
+                0,
+                8,
+                0
+            )
+
+            setOnClickListener {
+                action()
+            }
+        }
+    }
+
+    private fun topSmallParams():
+        LinearLayout.LayoutParams {
+
+        return LinearLayout.LayoutParams(
+            58,
+            44
+        ).apply {
+            setMargins(
+                2,
+                0,
+                2,
+                0
+            )
+        }
+    }
+
+    private fun modeChip(
+        textValue: String,
+        action: () -> Unit
+    ): Button {
+
+        return Button(this).apply {
+
+            text = textValue
+            textSize = 9f
+            setTextColor(Color.WHITE)
+
+            background = roundBackground(
+                Color.argb(
+                    65,
+                    255,
+                    255,
+                    255
+                ),
+                999f
+            )
+
+            setPadding(
+                8,
+                0,
+                8,
+                0
+            )
+
+            setOnClickListener {
+                action()
+            }
+
+            layoutParams =
+                LinearLayout.LayoutParams(
+                    0,
+                    42,
+                    1f
+                ).apply {
+                    setMargins(
+                        2,
+                        0,
+                        2,
+                        0
+                    )
+                }
+        }
     }
 
     private fun roundBackground(
@@ -377,7 +644,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun shutterBackground(): GradientDrawable {
+    private fun shutterBackground():
+        GradientDrawable {
 
         return GradientDrawable().apply {
 
@@ -388,7 +656,7 @@ class MainActivity : ComponentActivity() {
             setStroke(
                 5,
                 Color.argb(
-                    190,
+                    210,
                     255,
                     255,
                     255
@@ -402,57 +670,66 @@ class MainActivity : ComponentActivity() {
         zoomButtonsLayout.removeAllViews()
         quickZoomButtons.clear()
 
-        val levels = listOf(
-            1.0f,
-            2.0f,
-            5.0f
-        )
+        val levels =
+            listOf(
+                0.5f,
+                1.0f,
+                2.0f,
+                5.0f
+            )
 
         for (level in levels) {
 
-            val button = Button(this).apply {
+            val button =
+                Button(this).apply {
 
-                text = String.format(
-                    Locale.US,
-                    "%.0f×",
-                    level
-                )
+                    text =
+                        if (level == 0.5f) {
+                            "0.5×"
+                        } else {
+                            String.format(
+                                Locale.US,
+                                "%.0f×",
+                                level
+                            )
+                        }
 
-                textSize = 12f
-                setTextColor(Color.WHITE)
+                    textSize = 11f
+                    setTextColor(Color.WHITE)
 
-                background = roundBackground(
-                    Color.argb(
-                        85,
-                        255,
-                        255,
-                        255
-                    ),
-                    999f
-                )
+                    background =
+                        roundBackground(
+                            Color.argb(
+                                75,
+                                255,
+                                255,
+                                255
+                            ),
+                            999f
+                        )
 
-                setPadding(
-                    8,
-                    0,
-                    8,
-                    0
-                )
+                    setPadding(
+                        5,
+                        0,
+                        5,
+                        0
+                    )
 
-                setOnClickListener {
-                    applyQuickZoom(level)
+                    setOnClickListener {
+                        applyQuickZoom(level)
+                    }
                 }
-            }
 
             val params =
                 LinearLayout.LayoutParams(
-                    62,
+                    58,
                     42
                 )
 
             params.setMargins(
-                5,
+                3,
                 2,
-                5,
+                3,
                 2
             )
 
@@ -461,7 +738,9 @@ class MainActivity : ComponentActivity() {
                 params
             )
 
-            quickZoomButtons.add(button)
+            quickZoomButtons.add(
+                button
+            )
         }
     }
 
@@ -479,25 +758,34 @@ class MainActivity : ComponentActivity() {
 
             try {
 
-                val provider = future.get()
+                val provider =
+                    future.get()
 
-                cameraProvider = provider
+                cameraProvider =
+                    provider
 
                 val selector =
                     if (isFrontCamera) {
-                        CameraSelector.DEFAULT_FRONT_CAMERA
+                        CameraSelector
+                            .DEFAULT_FRONT_CAMERA
                     } else {
-                        CameraSelector.DEFAULT_BACK_CAMERA
+                        CameraSelector
+                            .DEFAULT_BACK_CAMERA
                     }
 
-                if (!provider.hasCamera(selector)) {
+                if (
+                    !provider.hasCamera(
+                        selector
+                    )
+                ) {
 
                     showMessage(
                         "Kamera tidak tersedia"
                     )
 
                     isFrontCamera = false
-                    shutterButton.isEnabled = true
+                    shutterButton.isEnabled =
+                        true
 
                     return@addListener
                 }
@@ -518,15 +806,10 @@ class MainActivity : ComponentActivity() {
                             ImageCapture
                                 .CAPTURE_MODE_MINIMIZE_LATENCY
                         )
+                        .setFlashMode(
+                            flashMode
+                        )
 
-                /*
-                 * Astro mode dasar.
-                 *
-                 * Hanya diterapkan pada kamera belakang.
-                 * Jika hardware tidak mendukung request,
-                 * CameraX akan gagal dan kita kembali
-                 * memberi pesan kepada pengguna.
-                 */
                 if (
                     isAstroMode &&
                     !isFrontCamera
@@ -592,20 +875,23 @@ class MainActivity : ComponentActivity() {
                         video
                     )
 
-                imageCapture = capture
-                videoCapture = video
+                imageCapture =
+                    capture
+
+                videoCapture =
+                    video
 
                 isCameraReady = true
-                shutterButton.isEnabled = true
+                shutterButton.isEnabled =
+                    true
 
-                createQuickZoomButtons()
                 updateZoomControls()
 
             } catch (e: Exception) {
 
                 isCameraReady = false
-
-                shutterButton.isEnabled = false
+                shutterButton.isEnabled =
+                    false
 
                 showMessage(
                     if (isAstroMode) {
@@ -620,7 +906,6 @@ class MainActivity : ComponentActivity() {
                     isAstroMode = false
                     isVideoMode = false
 
-                    modeButton.text = "PHOTO"
                     statusText.text =
                         "NINJACAM • PHOTO"
 
@@ -640,7 +925,8 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val next = !isFrontCamera
+        val next =
+            !isFrontCamera
 
         if (
             isAstroMode &&
@@ -656,16 +942,21 @@ class MainActivity : ComponentActivity() {
 
         val selector =
             if (next) {
-                CameraSelector.DEFAULT_FRONT_CAMERA
+                CameraSelector
+                    .DEFAULT_FRONT_CAMERA
             } else {
-                CameraSelector.DEFAULT_BACK_CAMERA
+                CameraSelector
+                    .DEFAULT_BACK_CAMERA
             }
 
         val provider =
-            cameraProvider ?: return
+            cameraProvider
+                ?: return
 
         if (
-            !provider.hasCamera(selector)
+            !provider.hasCamera(
+                selector
+            )
         ) {
 
             showMessage(
@@ -680,70 +971,99 @@ class MainActivity : ComponentActivity() {
         startCamera()
     }
 
-    private fun cycleMode() {
+    private fun setPhotoMode() {
 
-        if (isRecording) {
-            return
+        if (isRecording) return
+
+        isVideoMode = false
+        isAstroMode = false
+
+        modeButton.text = "PHOTO"
+        statusText.text =
+            "NINJACAM • PHOTO"
+
+        startCamera()
+    }
+
+    private fun setVideoMode() {
+
+        if (isRecording) return
+
+        isVideoMode = true
+        isAstroMode = false
+
+        modeButton.text = "VIDEO"
+        statusText.text =
+            "NINJACAM • VIDEO"
+
+        startCamera()
+    }
+
+    private fun setAstroMode() {
+
+        if (isRecording) return
+
+        isVideoMode = false
+        isAstroMode = true
+
+        if (isFrontCamera) {
+            isFrontCamera = false
         }
 
-        when {
+        modeButton.text = "ASTRO"
+        statusText.text =
+            "NINJACAM • ASTRO"
 
-            !isVideoMode &&
-                !isAstroMode -> {
+        startCamera()
+    }
 
-                isVideoMode = true
-                isAstroMode = false
+    private fun cycleFlash() {
 
-                modeButton.text = "VIDEO"
+        flashMode =
+            when (flashMode) {
 
-                statusText.text =
-                    "NINJACAM • VIDEO"
+                ImageCapture.FLASH_MODE_AUTO ->
+                    ImageCapture.FLASH_MODE_ON
+
+                ImageCapture.FLASH_MODE_ON ->
+                    ImageCapture.FLASH_MODE_OFF
+
+                else ->
+                    ImageCapture.FLASH_MODE_AUTO
             }
 
-            isVideoMode -> {
+        flashButton.text =
+            when (flashMode) {
 
-                isVideoMode = false
-                isAstroMode = true
+                ImageCapture.FLASH_MODE_AUTO ->
+                    "⚡ AUTO"
 
-                if (isFrontCamera) {
-                    isFrontCamera = false
-                }
+                ImageCapture.FLASH_MODE_ON ->
+                    "⚡ ON"
 
-                modeButton.text = "ASTRO"
-
-                statusText.text =
-                    "NINJACAM • ASTRO"
-
-                startCamera()
+                else ->
+                    "⚡ OFF"
             }
 
-            else -> {
-
-                isVideoMode = false
-                isAstroMode = false
-
-                modeButton.text = "PHOTO"
-
-                statusText.text =
-                    "NINJACAM • PHOTO"
-
-                startCamera()
-            }
+        if (isCameraReady) {
+            startCamera()
         }
+    }
 
-        shutterButton.animate()
-            .scaleX(0.9f)
-            .scaleY(0.9f)
-            .setDuration(80)
-            .withEndAction {
+    private fun cycleTimer() {
 
-                shutterButton.animate()
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .setDuration(120)
-                    .start()
+        timerSeconds =
+            when (timerSeconds) {
+                0 -> 3
+                3 -> 5
+                else -> 0
             }
-            .start()
+
+        timerButton.text =
+            when (timerSeconds) {
+                0 -> "TIMER"
+                else -> "⏱ ${timerSeconds}s"
+            }
     }
 
     private fun onShutterPressed() {
@@ -760,6 +1080,25 @@ class MainActivity : ComponentActivity() {
                 requestAudioAndRecord()
             }
 
+            return
+        }
+
+        if (timerSeconds > 0) {
+
+            shutterButton.isEnabled = false
+
+            showMessage(
+                "Foto dalam ${timerSeconds} detik…"
+            )
+
+            Handler(
+                Looper.getMainLooper()
+            ).postDelayed({
+
+                takePhoto()
+
+            }, timerSeconds * 1000L)
+
         } else {
 
             takePhoto()
@@ -769,9 +1108,11 @@ class MainActivity : ComponentActivity() {
     private fun takePhoto() {
 
         val capture =
-            imageCapture ?: return
+            imageCapture
+                ?: return
 
-        shutterButton.isEnabled = false
+        shutterButton.isEnabled =
+            false
 
         if (isAstroMode) {
 
@@ -821,10 +1162,8 @@ class MainActivity : ComponentActivity() {
                 .OutputFileOptions
                 .Builder(
                     contentResolver,
-
                     MediaStore.Images.Media
                         .EXTERNAL_CONTENT_URI,
-
                     values
                 )
                 .build()
@@ -867,11 +1206,7 @@ class MainActivity : ComponentActivity() {
                         true
 
                     showMessage(
-                        if (isAstroMode) {
-                            "Astro gagal mengambil foto"
-                        } else {
-                            "Gagal mengambil foto"
-                        }
+                        "Gagal mengambil foto"
                     )
                 }
             }
@@ -901,7 +1236,8 @@ class MainActivity : ComponentActivity() {
     ) {
 
         val video =
-            videoCapture ?: return
+            videoCapture
+                ?: return
 
         val values =
             ContentValues().apply {
@@ -937,7 +1273,6 @@ class MainActivity : ComponentActivity() {
             MediaStoreOutputOptions
                 .Builder(
                     contentResolver,
-
                     MediaStore.Video.Media
                         .EXTERNAL_CONTENT_URI
                 )
@@ -987,7 +1322,6 @@ class MainActivity : ComponentActivity() {
                         is VideoRecordEvent.Finalize -> {
 
                             isRecording = false
-
                             recording = null
 
                             shutterButton.text =
@@ -1027,7 +1361,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopVideoRecording() {
-
         recording?.stop()
     }
 
@@ -1045,8 +1378,6 @@ class MainActivity : ComponentActivity() {
 
         val maxZoom =
             state.maxZoomRatio
-
-        zoomSlider.max = 1000
 
         zoomSlider.progress =
             calculateZoomProgress(
@@ -1067,11 +1398,13 @@ class MainActivity : ComponentActivity() {
             button in quickZoomButtons
         ) {
 
-            val level =
-                when (
-                    button.text.toString()
-                ) {
+            val label =
+                button.text.toString()
 
+            val level =
+                when (label) {
+
+                    "0.5×" -> 0.5f
                     "1×" -> 1.0f
                     "2×" -> 2.0f
                     "5×" -> 5.0f
@@ -1079,17 +1412,28 @@ class MainActivity : ComponentActivity() {
                     else -> 1.0f
                 }
 
-            button.isEnabled =
+            /*
+             * CameraX zoom ratio biasanya
+             * dimulai dari 1.0x.
+             *
+             * Jadi 0.5x hanya aktif
+             * jika device benar-benar
+             * menyediakan rentang zoom
+             * tersebut.
+             */
+
+            val available =
                 level >= minZoom &&
-                level <= maxZoom
+                    level <= maxZoom
+
+            button.isEnabled =
+                available
 
             button.alpha =
-                if (
-                    button.isEnabled
-                ) {
+                if (available) {
                     1f
                 } else {
-                    0.35f
+                    0.3f
                 }
         }
     }
@@ -1136,7 +1480,7 @@ class MainActivity : ComponentActivity() {
             showMessage(
                 String.format(
                     Locale.US,
-                    "Zoom %.0f× tidak tersedia",
+                    "Zoom %.1f× tidak tersedia",
                     level
                 )
             )
@@ -1147,7 +1491,9 @@ class MainActivity : ComponentActivity() {
         applyZoom(level)
 
         zoomSlider.progress =
-            calculateZoomProgress(level)
+            calculateZoomProgress(
+                level
+            )
     }
 
     private fun calculateZoomProgress(
@@ -1174,10 +1520,8 @@ class MainActivity : ComponentActivity() {
                 (
                     zoom -
                         state.minZoomRatio
-                ) /
-                    range
-            ) *
-                1000f
+                ) / range
+            ) * 1000f
         )
             .roundToInt()
             .coerceIn(
@@ -1249,5 +1593,75 @@ class MainActivity : ComponentActivity() {
         cameraProvider?.unbindAll()
 
         super.onDestroy()
+    }
+
+    /*
+     * SIMPLE CAMERA GRID
+     */
+
+    private class GridOverlay(
+        context: android.content.Context
+    ) : View(context) {
+
+        private val paint =
+            android.graphics.Paint().apply {
+                color =
+                    Color.argb(
+                        120,
+                        255,
+                        255,
+                        255
+                    )
+
+                strokeWidth = 1.5f
+                style =
+                    android.graphics.Paint.Style.STROKE
+            }
+
+        override fun onDraw(
+            canvas:
+            android.graphics.Canvas
+        ) {
+
+            super.onDraw(canvas)
+
+            val width =
+                width.toFloat()
+
+            val height =
+                height.toFloat()
+
+            canvas.drawLine(
+                width / 3f,
+                0f,
+                width / 3f,
+                height,
+                paint
+            )
+
+            canvas.drawLine(
+                width * 2f / 3f,
+                0f,
+                width * 2f / 3f,
+                height,
+                paint
+            )
+
+            canvas.drawLine(
+                0f,
+                height / 3f,
+                width,
+                height / 3f,
+                paint
+            )
+
+            canvas.drawLine(
+                0f,
+                height * 2f / 3f,
+                width,
+                height * 2f / 3f,
+                paint
+            )
+        }
     }
 }
