@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var switchButton: ImageButton
     private lateinit var zoomSlider: SeekBar
     private lateinit var zoomText: TextView
+    private lateinit var zoomButtonsLayout: LinearLayout
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
@@ -58,6 +59,9 @@ class MainActivity : ComponentActivity() {
     private var isCameraReady = false
     private var isRecording = false
 
+    private val quickZoomButtons =
+        mutableListOf<Button>()
+
     private val cameraPermission =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -65,7 +69,9 @@ class MainActivity : ComponentActivity() {
             if (granted) {
                 startCamera()
             } else {
-                showMessage("Izin kamera diperlukan")
+                showMessage(
+                    "Izin kamera diperlukan"
+                )
             }
         }
 
@@ -76,23 +82,34 @@ class MainActivity : ComponentActivity() {
             if (granted) {
                 startVideoRecording()
             } else {
-                showMessage("Izin mikrofon diperlukan untuk audio")
+                showMessage(
+                    "Izin mikrofon diperlukan untuk audio"
+                )
             }
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
 
         createCameraUi()
 
-        if (hasPermission(Manifest.permission.CAMERA)) {
+        if (hasPermission(
+                Manifest.permission.CAMERA
+            )
+        ) {
             startCamera()
         } else {
-            cameraPermission.launch(Manifest.permission.CAMERA)
+            cameraPermission.launch(
+                Manifest.permission.CAMERA
+            )
         }
     }
 
-    private fun hasPermission(permission: String): Boolean {
+    private fun hasPermission(
+        permission: String
+    ): Boolean {
         return ContextCompat.checkSelfPermission(
             this,
             permission
@@ -104,18 +121,31 @@ class MainActivity : ComponentActivity() {
         val root = FrameLayout(this)
 
         previewView = PreviewView(this).apply {
-            scaleType = PreviewView.ScaleType.FILL_CENTER
+            scaleType =
+                PreviewView.ScaleType.FILL_CENTER
         }
 
         root.addView(
             previewView,
-            FrameLayout.LayoutParams(-1, -1)
+            FrameLayout.LayoutParams(
+                -1,
+                -1
+            )
         )
 
         val topBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(16, 18, 16, 10)
+            orientation =
+                LinearLayout.HORIZONTAL
+
+            gravity =
+                Gravity.CENTER_VERTICAL
+
+            setPadding(
+                16,
+                18,
+                16,
+                10
+            )
         }
 
         statusText = TextView(this).apply {
@@ -126,22 +156,41 @@ class MainActivity : ComponentActivity() {
 
         topBar.addView(
             statusText,
-            LinearLayout.LayoutParams(0, 55, 1f)
+            LinearLayout.LayoutParams(
+                0,
+                55,
+                1f
+            )
         )
 
-        switchButton = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_camera)
-            setColorFilter(Color.WHITE)
-            background = circleBackground(Color.DKGRAY)
-            contentDescription = "Ganti kamera"
-            setOnClickListener {
-                switchCamera()
+        switchButton =
+            ImageButton(this).apply {
+
+                setImageResource(
+                    android.R.drawable.ic_menu_camera
+                )
+
+                setColorFilter(Color.WHITE)
+
+                background =
+                    circleBackground(
+                        Color.DKGRAY
+                    )
+
+                contentDescription =
+                    "Ganti kamera"
+
+                setOnClickListener {
+                    switchCamera()
+                }
             }
-        }
 
         topBar.addView(
             switchButton,
-            LinearLayout.LayoutParams(55, 55)
+            LinearLayout.LayoutParams(
+                55,
+                55
+            )
         )
 
         root.addView(
@@ -153,68 +202,127 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        val bottomPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(20, 14, 20, 28)
-            setBackgroundColor(
-                Color.argb(175, 0, 0, 0)
-            )
-        }
+        val bottomPanel =
+            LinearLayout(this).apply {
 
-        zoomText = TextView(this).apply {
-            text = "1.0×"
-            textSize = 17f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-        }
+                orientation =
+                    LinearLayout.VERTICAL
 
-        zoomSlider = SeekBar(this).apply {
-            max = 1000
-            progress = 0
+                gravity =
+                    Gravity.CENTER
 
-            setOnSeekBarChangeListener(
-                object : SeekBar.OnSeekBarChangeListener {
+                setPadding(
+                    20,
+                    14,
+                    20,
+                    28
+                )
 
-                    override fun onProgressChanged(
-                        seekBar: SeekBar?,
-                        progress: Int,
-                        fromUser: Boolean
-                    ) {
-                        if (fromUser) {
-                            applySliderZoom(progress)
+                setBackgroundColor(
+                    Color.argb(
+                        175,
+                        0,
+                        0,
+                        0
+                    )
+                )
+            }
+
+        zoomText =
+            TextView(this).apply {
+
+                text = "1.0×"
+
+                textSize = 17f
+
+                gravity =
+                    Gravity.CENTER
+
+                setTextColor(Color.WHITE)
+            }
+
+        zoomButtonsLayout =
+            LinearLayout(this).apply {
+
+                orientation =
+                    LinearLayout.HORIZONTAL
+
+                gravity =
+                    Gravity.CENTER
+            }
+
+        zoomSlider =
+            SeekBar(this).apply {
+
+                max = 1000
+                progress = 0
+
+                setOnSeekBarChangeListener(
+                    object :
+                        SeekBar.OnSeekBarChangeListener {
+
+                        override fun
+                            onProgressChanged(
+                            seekBar: SeekBar?,
+                            progress: Int,
+                            fromUser: Boolean
+                        ) {
+
+                            if (fromUser) {
+                                applySliderZoom(
+                                    progress
+                                )
+                            }
+                        }
+
+                        override fun
+                            onStartTrackingTouch(
+                            seekBar: SeekBar?
+                        ) {
+                        }
+
+                        override fun
+                            onStopTrackingTouch(
+                            seekBar: SeekBar?
+                        ) {
                         }
                     }
+                )
+            }
 
-                    override fun onStartTrackingTouch(
-                        seekBar: SeekBar?
-                    ) {
-                    }
+        modeButton =
+            Button(this).apply {
 
-                    override fun onStopTrackingTouch(
-                        seekBar: SeekBar?
-                    ) {
-                    }
+                text = "PHOTO"
+
+                setOnClickListener {
+                    toggleMode()
                 }
+            }
+
+        shutterButton =
+            Button(this).apply {
+
+                text = "●"
+
+                textSize = 25f
+
+                setOnClickListener {
+                    onShutterPressed()
+                }
+            }
+
+        bottomPanel.addView(
+            zoomText
+        )
+
+        bottomPanel.addView(
+            zoomButtonsLayout,
+            LinearLayout.LayoutParams(
+                -1,
+                48
             )
-        }
-
-        modeButton = Button(this).apply {
-            text = "PHOTO"
-            setOnClickListener {
-                toggleMode()
-            }
-        }
-
-        shutterButton = Button(this).apply {
-            text = "●"
-            textSize = 25f
-            setOnClickListener {
-                onShutterPressed()
-            }
-        }
-
-        bottomPanel.addView(zoomText)
+        )
 
         bottomPanel.addView(
             zoomSlider,
@@ -224,7 +332,9 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        bottomPanel.addView(modeButton)
+        bottomPanel.addView(
+            modeButton
+        )
 
         bottomPanel.addView(
             shutterButton,
@@ -244,11 +354,66 @@ class MainActivity : ComponentActivity() {
         )
 
         setContentView(root)
+
+        createQuickZoomButtons()
     }
 
-    private fun circleBackground(color: Int): GradientDrawable {
+    private fun createQuickZoomButtons() {
+
+        zoomButtonsLayout.removeAllViews()
+
+        quickZoomButtons.clear()
+
+        val zoomLevels =
+            listOf(
+                1.0f,
+                2.0f,
+                5.0f
+            )
+
+        for (level in zoomLevels) {
+
+            val button =
+                Button(this).apply {
+
+                    text = String.format(
+                        Locale.US,
+                        "%.0f×",
+                        level
+                    )
+
+                    textSize = 13f
+
+                    setOnClickListener {
+                        applyQuickZoom(
+                            level
+                        )
+                    }
+                }
+
+            zoomButtonsLayout.addView(
+                button,
+                LinearLayout.LayoutParams(
+                    75,
+                    48
+                )
+            )
+
+            quickZoomButtons.add(
+                button
+            )
+        }
+    }
+
+    private fun circleBackground(
+        color: Int
+    ): GradientDrawable {
+
         return GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
+
+            shape =
+                GradientDrawable.OVAL
+
             setColor(color)
         }
     }
@@ -256,71 +421,104 @@ class MainActivity : ComponentActivity() {
     private fun startCamera() {
 
         isCameraReady = false
+
         shutterButton.isEnabled = false
 
-        val future = ProcessCameraProvider.getInstance(this)
+        val future =
+            ProcessCameraProvider.getInstance(
+                this
+            )
 
         future.addListener({
 
             try {
 
-                val provider = future.get()
-                cameraProvider = provider
+                val provider =
+                    future.get()
+
+                cameraProvider =
+                    provider
 
                 val selector =
                     if (isFrontCamera) {
-                        CameraSelector.DEFAULT_FRONT_CAMERA
+                        CameraSelector
+                            .DEFAULT_FRONT_CAMERA
                     } else {
-                        CameraSelector.DEFAULT_BACK_CAMERA
+                        CameraSelector
+                            .DEFAULT_BACK_CAMERA
                     }
 
-                if (!provider.hasCamera(selector)) {
+                if (!provider.hasCamera(
+                        selector
+                    )
+                ) {
 
-                    showMessage("Kamera tidak tersedia")
+                    showMessage(
+                        "Kamera tidak tersedia"
+                    )
 
                     isFrontCamera = false
-                    shutterButton.isEnabled = true
+
+                    shutterButton.isEnabled =
+                        true
 
                     return@addListener
                 }
 
-                val preview = Preview.Builder()
-                    .build()
-                    .also {
-                        it.surfaceProvider =
-                            previewView.surfaceProvider
-                    }
+                val preview =
+                    Preview.Builder()
+                        .build()
+                        .also {
+                            it.surfaceProvider =
+                                previewView
+                                    .surfaceProvider
+                        }
 
-                val capture = ImageCapture.Builder()
-                    .setCaptureMode(
-                        ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-                    )
-                    .build()
+                val capture =
+                    ImageCapture.Builder()
+                        .setCaptureMode(
+                            ImageCapture
+                                .CAPTURE_MODE_MINIMIZE_LATENCY
+                        )
+                        .build()
 
-                val recorder = Recorder.Builder()
-                    .setQualitySelector(
-                        QualitySelector.from(Quality.HD)
-                    )
-                    .build()
+                val recorder =
+                    Recorder.Builder()
+                        .setQualitySelector(
+                            QualitySelector.from(
+                                Quality.HD
+                            )
+                        )
+                        .build()
 
                 val video =
-                    VideoCapture.withOutput(recorder)
+                    VideoCapture
+                        .withOutput(
+                            recorder
+                        )
 
                 provider.unbindAll()
 
-                camera = provider.bindToLifecycle(
-                    this,
-                    selector,
-                    preview,
-                    capture,
+                camera =
+                    provider.bindToLifecycle(
+                        this,
+                        selector,
+                        preview,
+                        capture,
+                        video
+                    )
+
+                imageCapture =
+                    capture
+
+                videoCapture =
                     video
-                )
 
-                imageCapture = capture
-                videoCapture = video
+                isCameraReady =
+                    true
 
-                isCameraReady = true
-                shutterButton.isEnabled = true
+                shutterButton.isEnabled =
+                    true
 
                 updateZoomControls()
 
@@ -336,27 +534,42 @@ class MainActivity : ComponentActivity() {
 
     private fun switchCamera() {
 
-        if (!isCameraReady || isRecording) {
+        if (!isCameraReady ||
+            isRecording
+        ) {
             return
         }
 
-        val next = !isFrontCamera
+        val next =
+            !isFrontCamera
 
         val selector =
             if (next) {
-                CameraSelector.DEFAULT_FRONT_CAMERA
+                CameraSelector
+                    .DEFAULT_FRONT_CAMERA
             } else {
-                CameraSelector.DEFAULT_BACK_CAMERA
+                CameraSelector
+                    .DEFAULT_BACK_CAMERA
             }
 
-        val provider = cameraProvider ?: return
+        val provider =
+            cameraProvider ?: return
 
-        if (!provider.hasCamera(selector)) {
-            showMessage("Kamera tidak tersedia")
+        if (!provider.hasCamera(
+                selector
+            )
+        ) {
+
+            showMessage(
+                "Kamera tidak tersedia"
+            )
+
             return
         }
 
-        isFrontCamera = next
+        isFrontCamera =
+            next
+
         startCamera()
     }
 
@@ -366,7 +579,8 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        isVideoMode = !isVideoMode
+        isVideoMode =
+            !isVideoMode
 
         modeButton.text =
             if (isVideoMode) {
@@ -404,47 +618,68 @@ class MainActivity : ComponentActivity() {
 
     private fun takePhoto() {
 
-        val capture = imageCapture ?: return
+        val capture =
+            imageCapture ?: return
 
-        shutterButton.isEnabled = false
+        shutterButton.isEnabled =
+            false
 
-        val values = ContentValues().apply {
+        val values =
+            ContentValues().apply {
 
-            put(
-                MediaStore.Images.Media.DISPLAY_NAME,
-                "NinjaCam_${System.currentTimeMillis()}.jpg"
-            )
-
-            put(
-                MediaStore.Images.Media.MIME_TYPE,
-                "image/jpeg"
-            )
-
-            if (Build.VERSION.SDK_INT >= 29) {
                 put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "Pictures/NinjaCam"
+                    MediaStore.Images.Media
+                        .DISPLAY_NAME,
+                    "NinjaCam_${
+                        System.currentTimeMillis()
+                    }.jpg"
                 )
+
+                put(
+                    MediaStore.Images.Media
+                        .MIME_TYPE,
+                    "image/jpeg"
+                )
+
+                if (Build.VERSION.SDK_INT >= 29) {
+
+                    put(
+                        MediaStore.Images.Media
+                            .RELATIVE_PATH,
+                        "Pictures/NinjaCam"
+                    )
+                }
             }
-        }
 
         val options =
-            ImageCapture.OutputFileOptions.Builder(
-                contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                values
-            ).build()
+            ImageCapture
+                .OutputFileOptions
+                .Builder(
+                    contentResolver,
+                    MediaStore.Images.Media
+                        .EXTERNAL_CONTENT_URI,
+                    values
+                )
+                .build()
 
         capture.takePicture(
             options,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
+            ContextCompat.getMainExecutor(
+                this
+            ),
+            object :
+                ImageCapture
+                    .OnImageSavedCallback {
 
                 override fun onImageSaved(
-                    result: ImageCapture.OutputFileResults
+                    result:
+                        ImageCapture
+                            .OutputFileResults
                 ) {
 
-                    shutterButton.isEnabled = true
+                    shutterButton
+                        .isEnabled =
+                        true
 
                     showMessage(
                         "Foto tersimpan ✓"
@@ -452,10 +687,13 @@ class MainActivity : ComponentActivity() {
                 }
 
                 override fun onError(
-                    exception: ImageCaptureException
+                    exception:
+                        ImageCaptureException
                 ) {
 
-                    shutterButton.isEnabled = true
+                    shutterButton
+                        .isEnabled =
+                        true
 
                     showMessage(
                         "Gagal mengambil foto"
@@ -468,45 +706,59 @@ class MainActivity : ComponentActivity() {
     private fun requestAudioAndRecord() {
 
         if (hasPermission(
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission
+                    .RECORD_AUDIO
             )
         ) {
+
             startVideoRecording()
+
         } else {
+
             audioPermission.launch(
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission
+                    .RECORD_AUDIO
             )
         }
     }
 
     private fun startVideoRecording() {
 
-        val video = videoCapture ?: return
+        val video =
+            videoCapture ?: return
 
-        val values = ContentValues().apply {
+        val values =
+            ContentValues().apply {
 
-            put(
-                MediaStore.Video.Media.DISPLAY_NAME,
-                "NinjaCam_${System.currentTimeMillis()}.mp4"
-            )
-
-            put(
-                MediaStore.Video.Media.MIME_TYPE,
-                "video/mp4"
-            )
-
-            if (Build.VERSION.SDK_INT >= 29) {
                 put(
-                    MediaStore.Video.Media.RELATIVE_PATH,
-                    "Movies/NinjaCam"
+                    MediaStore.Video.Media
+                        .DISPLAY_NAME,
+                    "NinjaCam_${
+                        System.currentTimeMillis()
+                    }.mp4"
                 )
+
+                put(
+                    MediaStore.Video.Media
+                        .MIME_TYPE,
+                    "video/mp4"
+                )
+
+                if (Build.VERSION.SDK_INT >= 29) {
+
+                    put(
+                        MediaStore.Video.Media
+                            .RELATIVE_PATH,
+                        "Movies/NinjaCam"
+                    )
+                }
             }
-        }
 
         val outputOptions =
             MediaStoreOutputOptions.Builder(
                 contentResolver,
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                MediaStore.Video.Media
+                    .EXTERNAL_CONTENT_URI
             )
                 .setContentValues(values)
                 .build()
@@ -514,57 +766,66 @@ class MainActivity : ComponentActivity() {
         try {
 
             var pending =
-                video.output.prepareRecording(
-                    this,
-                    outputOptions
-                )
+                video.output
+                    .prepareRecording(
+                        this,
+                        outputOptions
+                    )
 
             pending =
                 pending.withAudioEnabled()
 
-            recording = pending.start(
-                ContextCompat.getMainExecutor(this)
-            ) { event ->
+            recording =
+                pending.start(
+                    ContextCompat
+                        .getMainExecutor(
+                            this
+                        )
+                ) { event ->
 
-                when (event) {
+                    when (event) {
 
-                    is VideoRecordEvent.Start -> {
+                        is VideoRecordEvent.Start -> {
 
-                        isRecording = true
+                            isRecording =
+                                true
 
-                        shutterButton.text =
-                            "■ STOP"
+                            shutterButton.text =
+                                "■ STOP"
 
-                        statusText.text =
-                            "● RECORDING"
-                    }
+                            statusText.text =
+                                "● RECORDING"
+                        }
 
-                    is VideoRecordEvent.Finalize -> {
+                        is VideoRecordEvent.Finalize -> {
 
-                        isRecording = false
-                        recording = null
+                            isRecording =
+                                false
 
-                        shutterButton.text =
-                            "● REC"
+                            recording =
+                                null
 
-                        statusText.text =
-                            "NINJACAM"
+                            shutterButton.text =
+                                "● REC"
 
-                        if (!event.hasError()) {
+                            statusText.text =
+                                "NINJACAM"
 
-                            showMessage(
-                                "Video tersimpan ✓"
-                            )
+                            if (!event.hasError()) {
 
-                        } else {
+                                showMessage(
+                                    "Video tersimpan ✓"
+                                )
 
-                            showMessage(
-                                "Gagal menyimpan video"
-                            )
+                            } else {
+
+                                showMessage(
+                                    "Gagal menyimpan video"
+                                )
+                            }
                         }
                     }
                 }
-            }
 
         } catch (e: Exception) {
 
@@ -581,44 +842,155 @@ class MainActivity : ComponentActivity() {
     private fun updateZoomControls() {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
-        val minZoom = state.minZoomRatio
-        val maxZoom = state.maxZoomRatio
+        val minZoom =
+            state.minZoomRatio
 
-        zoomSlider.progress = 0
+        val maxZoom =
+            state.maxZoomRatio
 
-        zoomText.text = String.format(
-            Locale.US,
-            "%.1f×",
-            minZoom
-        )
+        zoomSlider.max =
+            1000
 
-        zoomSlider.max = 1000
+        zoomSlider.progress =
+            calculateZoomProgress(
+                minZoom
+            )
 
         zoomSlider.isEnabled =
             maxZoom > minZoom
+
+        zoomText.text =
+            String.format(
+                Locale.US,
+                "%.1f×",
+                minZoom
+            )
+
+        for (button in quickZoomButtons) {
+
+            val level =
+                when (
+                    button.text.toString()
+                ) {
+
+                    "1×" -> 1.0f
+                    "2×" -> 2.0f
+                    "5×" -> 5.0f
+
+                    else -> 1.0f
+                }
+
+            button.isEnabled =
+                level >= minZoom &&
+                level <= maxZoom
+        }
     }
 
-    private fun applySliderZoom(progress: Int) {
+    private fun applySliderZoom(
+        progress: Int
+    ) {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
         val ratio =
             state.minZoomRatio +
-                (state.maxZoomRatio - state.minZoomRatio) *
+                (
+                    state.maxZoomRatio -
+                        state.minZoomRatio
+                    ) *
                 progress / 1000f
 
         applyZoom(ratio)
     }
 
-    private fun applyZoom(ratio: Float) {
+    private fun applyQuickZoom(
+        level: Float
+    ) {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
+                ?: return
+
+        if (level < state.minZoomRatio ||
+            level > state.maxZoomRatio
+        ) {
+
+            showMessage(
+                String.format(
+                    Locale.US,
+                    "Zoom %.0f× tidak tersedia",
+                    level
+                )
+            )
+
+            return
+        }
+
+        applyZoom(level)
+
+        zoomSlider.progress =
+            calculateZoomProgress(
+                level
+            )
+    }
+
+    private fun calculateZoomProgress(
+        zoom: Float
+    ): Int {
+
+        val state =
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
+                ?: return 0
+
+        val range =
+            state.maxZoomRatio -
+                state.minZoomRatio
+
+        if (range <= 0f) {
+            return 0
+        }
+
+        return (
+            (
+                zoom -
+                    state.minZoomRatio
+                ) /
+                    range *
+                    1000f
+            )
+            .toInt()
+            .coerceIn(
+                0,
+                1000
+            )
+    }
+
+    private fun applyZoom(
+        ratio: Float
+    ) {
+
+        val state =
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
         val safeRatio =
@@ -627,18 +999,23 @@ class MainActivity : ComponentActivity() {
                 state.maxZoomRatio
             )
 
-        camera?.cameraControl?.setZoomRatio(
-            safeRatio
-        )
+        camera
+            ?.cameraControl
+            ?.setZoomRatio(
+                safeRatio
+            )
 
-        zoomText.text = String.format(
-            Locale.US,
-            "%.1f×",
-            safeRatio
-        )
+        zoomText.text =
+            String.format(
+                Locale.US,
+                "%.1f×",
+                safeRatio
+            )
     }
 
-    private fun showMessage(message: String) {
+    private fun showMessage(
+        message: String
+    ) {
 
         Toast.makeText(
             this,
@@ -650,6 +1027,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
 
         recording?.stop()
+
         cameraProvider?.unbindAll()
 
         super.onDestroy()
