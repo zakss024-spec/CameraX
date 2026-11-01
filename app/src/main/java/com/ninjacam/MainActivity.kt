@@ -1,9 +1,9 @@
 package com.ninjacam
 
 import android.Manifest
+import android.animation.Animator
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -14,9 +14,12 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -49,7 +52,10 @@ import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var rootContainer: FrameLayout
     private lateinit var previewView: PreviewView
+    private lateinit var focusRing: View
+
     private lateinit var statusText: TextView
     private lateinit var shutterButton: Button
     private lateinit var switchButton: ImageButton
@@ -64,6 +70,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var zoomText: TextView
     private lateinit var zoomButtonsLayout: LinearLayout
     private lateinit var bottomPanel: LinearLayout
+    private lateinit var modeRow: LinearLayout
+
+    private val modeButtons = mutableMapOf<String, Button>()
+    private val quickZoomButtons = mutableMapOf<Float, Button>()
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
@@ -83,7 +93,9 @@ class MainActivity : ComponentActivity() {
     private var hdrEnabled = false
     private var timerSeconds = 0
 
-    private val quickZoomButtons = mutableListOf<Button>()
+    private var currentZoom = 1f
+
+    private lateinit var scaleDetector: ScaleGestureDetector
 
     private val cameraPermission =
         registerForActivityResult(
@@ -103,214 +115,37 @@ class MainActivity : ComponentActivity() {
             if (granted) {
                 startVideoRecording(true)
             } else {
-                showMessage(
-                    "Mikrofon ditolak — video tanpa audio"
-                )
+                showMessage("Mikrofon ditolak — video tanpa audio")
                 startVideoRecording(false)
             }
         }
 
-    override fun onCreate(
-        savedInstanceState: Bundle?
-    ) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         createCameraUi()
-
-        /*
-         * Loading screen ditampilkan terlebih dahulu.
-         * Setelah selesai baru kamera dimulai.
-         */
         showLoadingScreen()
     }
 
-    private fun hasPermission(
-        permission: String
-    ): Boolean {
-
+    private fun hasPermission(permission: String): Boolean {
         return ContextCompat.checkSelfPermission(
             this,
             permission
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    /*
-     * =========================================================
-     * LOADING SCREEN
-     * =========================================================
-     */
+    // =========================================================
+    // LOADING SCREEN
+    // =========================================================
 
     private fun showLoadingScreen() {
 
-        val root =
-            findViewById<FrameLayout>(
-                android.R.id.content
-            )
+        val loading = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            alpha = 1f
+        }
 
-        val loading =
-            FrameLayout(this).apply {
-
-                setBackgroundColor(
-                    Color.BLACK
-                )
-
-                alpha = 1f
-            }
-
-        /*
-         * Logo / nama aplikasi
-         */
-
-        val logoText =
-            TextView(this).apply {
-
-                text = "NinjaCam"
-
-                textSize = 34f
-
-                gravity = Gravity.CENTER
-
-                setTextColor(
-                    Color.WHITE
-                )
-
-                setShadowLayer(
-                    14f,
-                    0f,
-                    0f,
-                    Color.WHITE
-                )
-
-                typeface =
-                    android.graphics.Typeface
-                        .create(
-                            "sans-serif",
-                            android.graphics.Typeface
-                                .BOLD
-                        )
-            }
-
-        loading.addView(
-            logoText,
-            FrameLayout.LayoutParams(
-                -1,
-                70,
-                Gravity.CENTER
-            ).apply {
-                bottomMargin = 100
-            }
-        )
-
-        /*
-         * Credit
-         */
-
-        val developerText =
-            TextView(this).apply {
-
-                text =
-                    "Developer: ZackssX"
-
-                textSize = 12f
-
-                gravity = Gravity.CENTER
-
-                setTextColor(
-                    Color.argb(
-                        210,
-                        255,
-                        255,
-                        255
-                    )
-                )
-            }
-
-        loading.addView(
-            developerText,
-            FrameLayout.LayoutParams(
-                -1,
-                40,
-                Gravity.CENTER
-            ).apply {
-                topMargin = 115
-            }
-        )
-
-        /*
-         * Tulisan kecil tambahan
-         */
-
-        val loveText =
-            TextView(this).apply {
-
-                text =
-                    "Fahiraa My Loveee"
-
-                textSize = 10f
-
-                gravity = Gravity.CENTER
-
-                setTextColor(
-                    Color.argb(
-                        150,
-                        255,
-                        255,
-                        255
-                    )
-                )
-            }
-
-        loading.addView(
-            loveText,
-            FrameLayout.LayoutParams(
-                -1,
-                30,
-                Gravity.CENTER
-            ).apply {
-                topMargin = 160
-            }
-        )
-
-        /*
-         * Flash overlay.
-         *
-         * Bentuk lingkaran putih yang akan
-         * membesar dan menyebar memenuhi layar.
-         */
-
-        val flash =
-            View(this).apply {
-
-                background =
-                    GradientDrawable().apply {
-
-                        shape =
-                            GradientDrawable.OVAL
-
-                        setColor(
-                            Color.WHITE
-                        )
-                    }
-
-                alpha = 0f
-
-                scaleX = 0.05f
-                scaleY = 0.05f
-            }
-
-        val flashSize =
-            resources.displayMetrics.widthPixels * 2
-
-        loading.addView(
-            flash,
-            FrameLayout.LayoutParams(
-                flashSize,
-                flashSize,
-                Gravity.CENTER
-            )
-        )
-
-        root.addView(
+        rootContainer.addView(
             loading,
             ViewGroup.LayoutParams(
                 -1,
@@ -318,26 +153,372 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        /*
-         * Animasi cekrek teratur.
-         *
-         * Tiga flash singkat:
-         * 1. kecil
-         * 2. sedang
-         * 3. lebih lebar
-         */
+        // Glow belakang logo
+        val glow = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(35, 150, 70, 255))
+            }
+            alpha = 0f
+            scaleX = 0.35f
+            scaleY = 0.35f
+        }
 
-        val flashHandler =
-            Handler(
-                Looper.getMainLooper()
+        loading.addView(
+            glow,
+            FrameLayout.LayoutParams(
+                310,
+                310,
+                Gravity.CENTER
+            )
+        )
+
+        // Logo sementara.
+        // Nanti bisa diganti dengan gambar ninja ungu asli.
+        val logo = TextView(this).apply {
+
+            text = "🥷"
+
+            textSize = 76f
+
+            gravity = Gravity.CENTER
+
+            alpha = 0f
+
+            scaleX = 0.65f
+            scaleY = 0.65f
+
+            setShadowLayer(
+                25f,
+                0f,
+                0f,
+                Color.rgb(145, 70, 255)
+            )
+        }
+
+        loading.addView(
+            logo,
+            FrameLayout.LayoutParams(
+                190,
+                190,
+                Gravity.CENTER
+            ).apply {
+                bottomMargin = 150
+            }
+        )
+
+        val title = TextView(this).apply {
+
+            text = "NinjaCam"
+
+            textSize = 38f
+
+            gravity = Gravity.CENTER
+
+            setTextColor(Color.WHITE)
+
+            typeface =
+                android.graphics.Typeface.create(
+                    "sans-serif",
+                    android.graphics.Typeface.BOLD
+                )
+
+            alpha = 0f
+
+            scaleX = 0.8f
+            scaleY = 0.8f
+
+            setShadowLayer(
+                16f,
+                0f,
+                0f,
+                Color.rgb(150, 75, 255)
+            )
+        }
+
+        loading.addView(
+            title,
+            FrameLayout.LayoutParams(
+                -1,
+                75,
+                Gravity.CENTER
+            ).apply {
+                topMargin = 115
+            }
+        )
+
+        val developer = TextView(this).apply {
+
+            text = "Developer: ZackssX"
+
+            textSize = 14f
+
+            gravity = Gravity.CENTER
+
+            setTextColor(
+                Color.argb(
+                    225,
+                    255,
+                    255,
+                    255
+                )
             )
 
-        fun doFlash(
-            delay: Long,
-            duration: Long
-        ) {
+            alpha = 0f
+        }
 
-            flashHandler.postDelayed({
+        loading.addView(
+            developer,
+            FrameLayout.LayoutParams(
+                -1,
+                40,
+                Gravity.CENTER
+            ).apply {
+                topMargin = 215
+            }
+        )
+
+        val love = TextView(this).apply {
+
+            text = "Fahiraa My Loveee"
+
+            textSize = 12f
+
+            gravity = Gravity.CENTER
+
+            setTextColor(
+                Color.argb(
+                    160,
+                    255,
+                    255,
+                    255
+                )
+            )
+
+            alpha = 0f
+        }
+
+        loading.addView(
+            love,
+            FrameLayout.LayoutParams(
+                -1,
+                35,
+                Gravity.CENTER
+            ).apply {
+                topMargin = 255
+            }
+        )
+
+        val loadingText = TextView(this).apply {
+
+            text = "Preparing camera"
+
+            textSize = 11f
+
+            gravity = Gravity.CENTER
+
+            setTextColor(
+                Color.argb(
+                    130,
+                    255,
+                    255,
+                    255
+                )
+            )
+
+            alpha = 0f
+        }
+
+        loading.addView(
+            loadingText,
+            FrameLayout.LayoutParams(
+                -1,
+                30,
+                Gravity.BOTTOM
+            ).apply {
+                bottomMargin = 85
+            }
+        )
+
+        // Progress line
+        val progressBackground = View(this).apply {
+            background = roundBackground(
+                Color.argb(45, 255, 255, 255),
+                999f
+            )
+        }
+
+        loading.addView(
+            progressBackground,
+            FrameLayout.LayoutParams(
+                180,
+                3,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            ).apply {
+                bottomMargin = 62
+            }
+        )
+
+        val progress = View(this).apply {
+            background = roundBackground(
+                Color.WHITE,
+                999f
+            )
+            scaleX = 0f
+            pivotX = 0f
+        }
+
+        loading.addView(
+            progress,
+            FrameLayout.LayoutParams(
+                180,
+                3,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            ).apply {
+                bottomMargin = 62
+            }
+        )
+
+        // Animasi masuk
+        Handler(Looper.getMainLooper()).postDelayed({
+
+            animateIn(
+                logo,
+                500L
+            )
+
+            animateIn(
+                title,
+                650L
+            )
+
+            fadeIn(
+                developer,
+                850L
+            )
+
+            fadeIn(
+                love,
+                1050L
+            )
+
+            fadeIn(
+                loadingText,
+                1250L
+            )
+
+            AnimatorSet().apply {
+
+                playTogether(
+                    ObjectAnimator.ofFloat(
+                        glow,
+                        View.ALPHA,
+                        0f,
+                        1f
+                    ),
+                    ObjectAnimator.ofFloat(
+                        glow,
+                        View.SCALE_X,
+                        0.35f,
+                        1f
+                    ),
+                    ObjectAnimator.ofFloat(
+                        glow,
+                        View.SCALE_Y,
+                        0.35f,
+                        1f
+                    )
+                )
+
+                duration = 1000L
+
+                interpolator =
+                    DecelerateInterpolator()
+
+                start()
+            }
+
+        }, 150L)
+
+        // Progress selama 10 detik
+        ObjectAnimator.ofFloat(
+            progress,
+            View.SCALE_X,
+            0f,
+            1f
+        ).apply {
+
+            duration = 8500L
+
+            startDelay = 600L
+
+            interpolator =
+                AccelerateDecelerateInterpolator()
+
+            start()
+        }
+
+        // Glow bernafas
+        val glowPulse =
+            ObjectAnimator.ofFloat(
+                glow,
+                View.ALPHA,
+                0.45f,
+                0.9f,
+                0.45f
+            ).apply {
+                duration = 1800L
+                repeatCount = 4
+                repeatMode =
+                    ObjectAnimator.REVERSE
+            }
+
+        Handler(Looper.getMainLooper())
+            .postDelayed({
+                glowPulse.start()
+            }, 1200L)
+
+        // Flash cinematic 3x
+        createLoadingFlash(
+            loading,
+            1800L,
+            220L
+        )
+
+        createLoadingFlash(
+            loading,
+            4300L,
+            220L
+        )
+
+        createLoadingFlash(
+            loading,
+            6900L,
+            250L
+        )
+
+        // Text berubah
+        Handler(Looper.getMainLooper())
+            .postDelayed({
+                loadingText.text =
+                    "Optimizing camera"
+            }, 3000L)
+
+        Handler(Looper.getMainLooper())
+            .postDelayed({
+                loadingText.text =
+                    "Checking camera hardware"
+            }, 5600L)
+
+        Handler(Looper.getMainLooper())
+            .postDelayed({
+                loadingText.text =
+                    "Starting NinjaCam"
+            }, 7800L)
+
+        // Selesai tepat sekitar 10 detik
+        Handler(Looper.getMainLooper())
+            .postDelayed({
 
                 if (
                     isFinishing ||
@@ -346,152 +527,229 @@ class MainActivity : ComponentActivity() {
                     return@postDelayed
                 }
 
-                flash.alpha = 0f
-                flash.scaleX = 0.05f
-                flash.scaleY = 0.05f
-
-                val alpha =
+                val fade =
                     ObjectAnimator.ofFloat(
-                        flash,
+                        loading,
                         View.ALPHA,
-                        0f,
-                        0.82f,
+                        1f,
                         0f
                     ).apply {
-
-                        this.duration =
-                            duration
-
+                        duration = 650L
                         interpolator =
-                            AccelerateDecelerateInterpolator()
+                            DecelerateInterpolator()
                     }
 
-                val scaleX =
-                    ObjectAnimator.ofFloat(
-                        flash,
-                        View.SCALE_X,
-                        0.05f,
-                        0.75f,
-                        1.25f
-                    ).apply {
+                fade.addListener(
+                    object : Animator.AnimatorListener {
 
-                        this.duration =
-                            duration
+                        override fun onAnimationStart(
+                            animation: Animator
+                        ) {
+                        }
 
-                        interpolator =
-                            AccelerateDecelerateInterpolator()
+                        override fun onAnimationEnd(
+                            animation: Animator
+                        ) {
+
+                            rootContainer
+                                .removeView(
+                                    loading
+                                )
+
+                            continueToCamera()
+                        }
+
+                        override fun onAnimationCancel(
+                            animation: Animator
+                        ) {
+                        }
+
+                        override fun onAnimationRepeat(
+                            animation: Animator
+                        ) {
+                        }
                     }
+                )
 
-                val scaleY =
-                    ObjectAnimator.ofFloat(
-                        flash,
-                        View.SCALE_Y,
-                        0.05f,
-                        0.75f,
-                        1.25f
-                    ).apply {
+                fade.start()
 
-                        this.duration =
-                            duration
+            }, 9350L)
+    }
 
-                        interpolator =
-                            AccelerateDecelerateInterpolator()
-                    }
+    private fun animateIn(
+        view: View,
+        duration: Long
+    ) {
 
-                AnimatorSet().apply {
+        AnimatorSet().apply {
 
-                    playTogether(
-                        alpha,
-                        scaleX,
-                        scaleY
-                    )
+            playTogether(
+                ObjectAnimator.ofFloat(
+                    view,
+                    View.ALPHA,
+                    0f,
+                    1f
+                ),
+                ObjectAnimator.ofFloat(
+                    view,
+                    View.SCALE_X,
+                    0.65f,
+                    1f
+                ),
+                ObjectAnimator.ofFloat(
+                    view,
+                    View.SCALE_Y,
+                    0.65f,
+                    1f
+                )
+            )
 
+            this.duration = duration
+
+            interpolator =
+                DecelerateInterpolator()
+
+            start()
+        }
+    }
+
+    private fun fadeIn(
+        view: View,
+        delay: Long
+    ) {
+
+        Handler(Looper.getMainLooper())
+            .postDelayed({
+
+                ObjectAnimator.ofFloat(
+                    view,
+                    View.ALPHA,
+                    0f,
+                    1f
+                ).apply {
+                    duration = 450L
                     start()
                 }
 
             }, delay)
-        }
+    }
 
-        doFlash(
-            delay = 120L,
-            duration = 190L
-        )
+    private fun createLoadingFlash(
+        parent: FrameLayout,
+        delay: Long,
+        duration: Long
+    ) {
 
-        doFlash(
-            delay = 390L,
-            duration = 190L
-        )
+        Handler(Looper.getMainLooper())
+            .postDelayed({
 
-        doFlash(
-            delay = 660L,
-            duration = 190L
-        )
-
-        /*
-         * Setelah loading selesai:
-         * hapus loading lalu mulai kamera.
-         */
-
-        flashHandler.postDelayed({
-
-            if (
-                isFinishing ||
-                isDestroyed
-            ) {
-                return@postDelayed
-            }
-
-            val fade =
-                ObjectAnimator.ofFloat(
-                    loading,
-                    View.ALPHA,
-                    1f,
-                    0f
-                ).apply {
-
-                    this.duration = 180L
+                if (
+                    isFinishing ||
+                    isDestroyed
+                ) {
+                    return@postDelayed
                 }
 
-            fade.addListener(
-                object :
-                    android.animation.Animator
-                        .AnimatorListener {
+                val flash = View(this).apply {
 
-                    override fun onAnimationStart(
-                        animation:
-                        android.animation.Animator
-                    ) {
-                    }
+                    background =
+                        GradientDrawable().apply {
 
-                    override fun onAnimationEnd(
-                        animation:
-                        android.animation.Animator
-                    ) {
+                            shape =
+                                GradientDrawable.OVAL
 
-                        root.removeView(
-                            loading
+                            setColor(Color.WHITE)
+                        }
+
+                    alpha = 0f
+
+                    scaleX = 0.03f
+                    scaleY = 0.03f
+                }
+
+                val size =
+                    resources
+                        .displayMetrics
+                        .widthPixels * 2
+
+                parent.addView(
+                    flash,
+                    FrameLayout.LayoutParams(
+                        size,
+                        size,
+                        Gravity.CENTER
+                    )
+                )
+
+                AnimatorSet().apply {
+
+                    playTogether(
+                        ObjectAnimator.ofFloat(
+                            flash,
+                            View.ALPHA,
+                            0f,
+                            0.65f,
+                            0f
+                        ),
+                        ObjectAnimator.ofFloat(
+                            flash,
+                            View.SCALE_X,
+                            0.03f,
+                            0.6f,
+                            1.15f
+                        ),
+                        ObjectAnimator.ofFloat(
+                            flash,
+                            View.SCALE_Y,
+                            0.03f,
+                            0.6f,
+                            1.15f
                         )
+                    )
 
-                        continueToCamera()
-                    }
+                    this.duration = duration
 
-                    override fun onAnimationCancel(
-                        animation:
-                        android.animation.Animator
-                    ) {
-                    }
+                    interpolator =
+                        AccelerateDecelerateInterpolator()
 
-                    override fun onAnimationRepeat(
-                        animation:
-                        android.animation.Animator
-                    ) {
-                    }
+                    start()
+
+                }.also {
+
+                    it.addListener(
+                        object :
+                            Animator.AnimatorListener {
+
+                            override fun onAnimationStart(
+                                animation: Animator
+                            ) {
+                            }
+
+                            override fun onAnimationEnd(
+                                animation: Animator
+                            ) {
+                                parent.removeView(
+                                    flash
+                                )
+                            }
+
+                            override fun onAnimationCancel(
+                                animation: Animator
+                            ) {
+                                parent.removeView(
+                                    flash
+                                )
+                            }
+
+                            override fun onAnimationRepeat(
+                                animation: Animator
+                            ) {
+                            }
+                        }
+                    )
                 }
-            )
 
-            fade.start()
-
-        }, 1050L)
+            }, delay)
     }
 
     private fun continueToCamera() {
@@ -501,37 +759,42 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.CAMERA
             )
         ) {
-
             startCamera()
-
         } else {
-
             cameraPermission.launch(
                 Manifest.permission.CAMERA
             )
         }
     }
 
-    /*
-     * =========================================================
-     * CAMERA UI
-     * =========================================================
-     */
+    // =========================================================
+    // CAMERA UI
+    // =========================================================
 
     private fun createCameraUi() {
 
-        val root = FrameLayout(this)
+        rootContainer =
+            FrameLayout(this)
 
-        previewView = PreviewView(this).apply {
+        rootContainer.setBackgroundColor(
+            Color.BLACK
+        )
 
-            scaleType =
-                PreviewView.ScaleType.FILL_CENTER
+        previewView =
+            PreviewView(this).apply {
 
-            implementationMode =
-                PreviewView.ImplementationMode.PERFORMANCE
-        }
+                scaleType =
+                    PreviewView.ScaleType.FILL_CENTER
 
-        root.addView(
+                implementationMode =
+                    PreviewView.ImplementationMode.PERFORMANCE
+
+                setBackgroundColor(
+                    Color.BLACK
+                )
+            }
+
+        rootContainer.addView(
             previewView,
             FrameLayout.LayoutParams(
                 -1,
@@ -539,9 +802,56 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        /*
-         * TOP BAR
-         */
+        // Focus ring
+        focusRing =
+            View(this).apply {
+
+                background =
+                    GradientDrawable().apply {
+
+                        shape =
+                            GradientDrawable.OVAL
+
+                        setColor(
+                            Color.TRANSPARENT
+                        )
+
+                        setStroke(
+                            2,
+                            Color.WHITE
+                        )
+                    }
+
+                alpha = 0f
+
+                visibility =
+                    View.INVISIBLE
+            }
+
+        rootContainer.addView(
+            focusRing,
+            FrameLayout.LayoutParams(
+                76,
+                76
+            )
+        )
+
+        // Preview touch / pinch
+        setupPreviewGestures()
+
+        // Top bar
+        createTopBar()
+
+        // Zoom
+        createZoomUi()
+
+        // Bottom
+        createBottomUi()
+
+        setContentView(rootContainer)
+    }
+
+    private fun createTopBar() {
 
         val topBar =
             LinearLayout(this).apply {
@@ -553,9 +863,9 @@ class MainActivity : ComponentActivity() {
                     Gravity.CENTER_VERTICAL
 
                 setPadding(
-                    16,
+                    14,
                     18,
-                    16,
+                    14,
                     8
                 )
             }
@@ -566,14 +876,18 @@ class MainActivity : ComponentActivity() {
                 text =
                     "NINJACAM • PHOTO"
 
-                textSize = 16f
+                textSize = 14f
 
                 setTextColor(
                     Color.WHITE
                 )
 
+                typeface =
+                    android.graphics.Typeface
+                        .DEFAULT_BOLD
+
                 setShadowLayer(
-                    6f,
+                    8f,
                     0f,
                     2f,
                     Color.BLACK
@@ -584,7 +898,7 @@ class MainActivity : ComponentActivity() {
             statusText,
             LinearLayout.LayoutParams(
                 0,
-                52,
+                48,
                 1f
             )
         )
@@ -607,6 +921,10 @@ class MainActivity : ComponentActivity() {
                         "HDR"
                     }
 
+                animateButton(
+                    hdrButton
+                )
+
                 showMessage(
                     if (hdrEnabled) {
                         "HDR diaktifkan"
@@ -617,14 +935,14 @@ class MainActivity : ComponentActivity() {
             }
 
         timerButton =
-            topButton("TIMER") {
+            topButton("◷") {
                 cycleTimer()
             }
 
         settingsButton =
             topButton("⚙") {
                 showMessage(
-                    "Settings akan ditambahkan"
+                    "Settings NinjaCam"
                 )
             }
 
@@ -640,7 +958,12 @@ class MainActivity : ComponentActivity() {
 
         topBar.addView(
             timerButton,
-            topSmallParams()
+            LinearLayout.LayoutParams(
+                48,
+                44
+            ).apply {
+                setMargins(2, 0, 2, 0)
+            }
         )
 
         topBar.addView(
@@ -651,7 +974,7 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        root.addView(
+        rootContainer.addView(
             topBar,
             FrameLayout.LayoutParams(
                 -1,
@@ -659,17 +982,16 @@ class MainActivity : ComponentActivity() {
                 Gravity.TOP
             )
         )
+    }
 
-        /*
-         * ZOOM TEXT
-         */
+    private fun createZoomUi() {
 
         zoomText =
             TextView(this).apply {
 
                 text = "1.0×"
 
-                textSize = 16f
+                textSize = 13f
 
                 gravity =
                     Gravity.CENTER
@@ -681,7 +1003,7 @@ class MainActivity : ComponentActivity() {
                 background =
                     roundBackground(
                         Color.argb(
-                            100,
+                            95,
                             0,
                             0,
                             0
@@ -690,60 +1012,24 @@ class MainActivity : ComponentActivity() {
                     )
 
                 setPadding(
-                    16,
-                    4,
-                    16,
-                    4
+                    12,
+                    3,
+                    12,
+                    3
                 )
             }
 
-        root.addView(
+        rootContainer.addView(
             zoomText,
             FrameLayout.LayoutParams(
-                82,
-                42,
-                Gravity.CENTER_HORIZONTAL or
-                    Gravity.CENTER_VERTICAL
+                70,
+                38,
+                Gravity.TOP or
+                    Gravity.CENTER_HORIZONTAL
             ).apply {
-                topMargin = 65
+                topMargin = 100
             }
         )
-
-        /*
-         * BOTTOM PANEL
-         */
-
-        bottomPanel =
-            LinearLayout(this).apply {
-
-                orientation =
-                    LinearLayout.VERTICAL
-
-                gravity =
-                    Gravity.CENTER
-
-                setPadding(
-                    14,
-                    10,
-                    14,
-                    18
-                )
-
-                background =
-                    roundBackground(
-                        Color.argb(
-                            145,
-                            0,
-                            0,
-                            0
-                        ),
-                        32f
-                    )
-            }
-
-        /*
-         * ZOOM BUTTONS
-         */
 
         zoomButtonsLayout =
             LinearLayout(this).apply {
@@ -753,25 +1039,47 @@ class MainActivity : ComponentActivity() {
 
                 gravity =
                     Gravity.CENTER
+
+                setPadding(
+                    5,
+                    3,
+                    5,
+                    3
+                )
+
+                background =
+                    roundBackground(
+                        Color.argb(
+                            75,
+                            0,
+                            0,
+                            0
+                        ),
+                        999f
+                    )
             }
 
-        bottomPanel.addView(
+        rootContainer.addView(
             zoomButtonsLayout,
-            LinearLayout.LayoutParams(
-                -1,
-                46
-            )
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                43,
+                Gravity.CENTER_HORIZONTAL or
+                    Gravity.BOTTOM
+            ).apply {
+                bottomMargin = 365
+            }
         )
 
-        /*
-         * ZOOM SLIDER
-         */
+        createQuickZoomButtons()
 
         zoomSlider =
             SeekBar(this).apply {
 
                 max = 1000
                 progress = 0
+
+                alpha = 0.65f
 
                 setOnSeekBarChangeListener(
                     object :
@@ -803,82 +1111,59 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-        bottomPanel.addView(
+        rootContainer.addView(
             zoomSlider,
-            LinearLayout.LayoutParams(
-                -1,
-                36
-            )
+            FrameLayout.LayoutParams(
+                180,
+                35,
+                Gravity.CENTER_HORIZONTAL or
+                    Gravity.BOTTOM
+            ).apply {
+                bottomMargin = 325
+            }
         )
+    }
 
-        /*
-         * MODE ROW
-         */
+    private fun createBottomUi() {
 
-        val modeRow =
+        bottomPanel =
             LinearLayout(this).apply {
 
                 orientation =
-                    LinearLayout.HORIZONTAL
+                    LinearLayout.VERTICAL
 
                 gravity =
                     Gravity.CENTER
-            }
 
-        val photoMode =
-            modeChip("PHOTO") {
-                setPhotoMode()
-            }
-
-        val videoMode =
-            modeChip("VIDEO") {
-                setVideoMode()
-            }
-
-        val nightMode =
-            modeChip("NIGHT") {
-                showMessage(
-                    "Night Mode sedang disiapkan"
+                setPadding(
+                    8,
+                    6,
+                    8,
+                    12
                 )
+
+                background =
+                    GradientDrawable().apply {
+
+                        setColor(
+                            Color.argb(
+                                105,
+                                0,
+                                0,
+                                0
+                            )
+
+                        cornerRadii =
+                            floatArrayOf(
+                                34f, 34f,
+                                34f, 34f,
+                                0f, 0f,
+                                0f, 0f
+                            )
+                    }
             }
 
-        val astroMode =
-            modeChip("ASTRO") {
-                setAstroMode()
-            }
-
-        val proMode =
-            modeChip("PRO") {
-                showMessage(
-                    "Pro Controls sedang disiapkan"
-                )
-            }
-
-        val liveMode =
-            modeChip("LIVE") {
-                showMessage(
-                    "Live Photo sedang disiapkan"
-                )
-            }
-
-        modeRow.addView(photoMode)
-        modeRow.addView(videoMode)
-        modeRow.addView(nightMode)
-        modeRow.addView(astroMode)
-        modeRow.addView(proMode)
-        modeRow.addView(liveMode)
-
-        bottomPanel.addView(
-            modeRow,
-            LinearLayout.LayoutParams(
-                -1,
-                48
-            )
-        )
-
-        /*
-         * SHUTTER ROW
-         */
+        createModeRow()
 
         val shutterRow =
             FrameLayout(this)
@@ -888,7 +1173,7 @@ class MainActivity : ComponentActivity() {
 
                 text = "▣"
 
-                textSize = 22f
+                textSize = 20f
 
                 setTextColor(
                     Color.WHITE
@@ -897,7 +1182,7 @@ class MainActivity : ComponentActivity() {
                 background =
                     roundBackground(
                         Color.argb(
-                            110,
+                            90,
                             255,
                             255,
                             255
@@ -906,6 +1191,10 @@ class MainActivity : ComponentActivity() {
                     )
 
                 setOnClickListener {
+                    animateButton(
+                        this
+                    )
+
                     showMessage(
                         "Gallery NinjaCam"
                     )
@@ -919,7 +1208,9 @@ class MainActivity : ComponentActivity() {
                 58,
                 Gravity.START or
                     Gravity.CENTER_VERTICAL
-            )
+            ).apply {
+                leftMargin = 8
+            }
         )
 
         shutterButton =
@@ -927,7 +1218,7 @@ class MainActivity : ComponentActivity() {
 
                 text = "●"
 
-                textSize = 27f
+                textSize = 28f
 
                 setTextColor(
                     Color.BLACK
@@ -937,6 +1228,7 @@ class MainActivity : ComponentActivity() {
                     shutterBackground()
 
                 setOnClickListener {
+                    animateShutter()
                     onShutterPressed()
                 }
             }
@@ -949,10 +1241,6 @@ class MainActivity : ComponentActivity() {
                 Gravity.CENTER
             )
         )
-
-        /*
-         * SWITCH CAMERA
-         */
 
         switchButton =
             ImageButton(this).apply {
@@ -969,7 +1257,7 @@ class MainActivity : ComponentActivity() {
                 background =
                     roundBackground(
                         Color.argb(
-                            110,
+                            90,
                             255,
                             255,
                             255
@@ -988,6 +1276,11 @@ class MainActivity : ComponentActivity() {
                 )
 
                 setOnClickListener {
+
+                    animateButton(
+                        this
+                    )
+
                     switchCamera()
                 }
             }
@@ -999,7 +1292,9 @@ class MainActivity : ComponentActivity() {
                 58,
                 Gravity.END or
                     Gravity.CENTER_VERTICAL
-            )
+            ).apply {
+                rightMargin = 8
+            }
         )
 
         bottomPanel.addView(
@@ -1010,26 +1305,232 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        root.addView(
+        rootContainer.addView(
             bottomPanel,
             FrameLayout.LayoutParams(
                 -1,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM
-            ).apply {
+            )
+        )
+    }
 
-                setMargins(
-                    8,
-                    0,
-                    8,
-                    8
+    private fun createModeRow() {
+
+        modeRow =
+            LinearLayout(this).apply {
+
+                orientation =
+                    LinearLayout.HORIZONTAL
+
+                gravity =
+                    Gravity.CENTER
+
+                setPadding(
+                    4,
+                    4,
+                    4,
+                    5
                 )
             }
+
+        val modes =
+            listOf(
+                "NIGHT",
+                "PHOTO",
+                "VIDEO",
+                "ASTRO",
+                "PRO",
+                "LIVE"
+            )
+
+        for (mode in modes) {
+
+            val button =
+                modeChip(mode) {
+
+                    when (mode) {
+
+                        "PHOTO" ->
+                            setPhotoMode()
+
+                        "VIDEO" ->
+                            setVideoMode()
+
+                        "ASTRO" ->
+                            setAstroMode()
+
+                        "NIGHT" ->
+                            showMessage(
+                                "Night Mode sedang disiapkan"
+                            )
+
+                        "PRO" ->
+                            showMessage(
+                                "Pro Controls sedang disiapkan"
+                            )
+
+                        "LIVE" ->
+                            showMessage(
+                                "Live Photo sedang disiapkan"
+                            )
+                    }
+                }
+
+            modeButtons[mode] =
+                button
+
+            modeRow.addView(
+                button
+            )
+        }
+
+        bottomPanel.addView(
+            modeRow,
+            LinearLayout.LayoutParams(
+                -1,
+                48
+            )
         )
 
-        setContentView(root)
+        updateModeUi("PHOTO")
+    }
 
-        createQuickZoomButtons()
+    private fun setupPreviewGestures() {
+
+        scaleDetector =
+            ScaleGestureDetector(
+                this,
+                object :
+                    ScaleGestureDetector
+                        .SimpleOnScaleGestureListener() {
+
+                    override fun onScale(
+                        detector:
+                        ScaleGestureDetector
+                    ): Boolean {
+
+                        val state =
+                            camera
+                                ?.cameraInfo
+                                ?.zoomState
+                                ?.value
+                                ?: return true
+
+                        val newZoom =
+                            currentZoom *
+                                detector.scaleFactor
+
+                        applyZoom(
+                            newZoom.coerceIn(
+                                state.minZoomRatio,
+                                state.maxZoomRatio
+                            )
+                        )
+
+                        return true
+                    }
+
+                    override fun onScaleBegin(
+                        detector:
+                        ScaleGestureDetector
+                    ): Boolean {
+
+                        currentZoom =
+                            camera
+                                ?.cameraInfo
+                                ?.zoomState
+                                ?.value
+                                ?.zoomRatio
+                                ?: 1f
+
+                        return true
+                    }
+                }
+            )
+
+        previewView.setOnTouchListener { _, event ->
+
+            scaleDetector.onTouchEvent(
+                event
+            )
+
+            if (
+                event.action ==
+                MotionEvent.ACTION_UP
+            ) {
+
+                showFocus(
+                    event.x,
+                    event.y
+                )
+            }
+
+            true
+        }
+    }
+
+    private fun showFocus(
+        x: Float,
+        y: Float
+    ) {
+
+        val size = 76
+
+        focusRing.layoutParams =
+            FrameLayout.LayoutParams(
+                size,
+                size
+            ).apply {
+                leftMargin =
+                    (x - size / 2)
+                        .roundToInt()
+                topMargin =
+                    (y - size / 2)
+                        .roundToInt()
+            }
+
+        focusRing.visibility =
+            View.VISIBLE
+
+        focusRing.alpha = 1f
+
+        focusRing.scaleX = 1.2f
+        focusRing.scaleY = 1.2f
+
+        AnimatorSet().apply {
+
+            playTogether(
+                ObjectAnimator.ofFloat(
+                    focusRing,
+                    View.SCALE_X,
+                    1.2f,
+                    1f,
+                    1.08f
+                ),
+                ObjectAnimator.ofFloat(
+                    focusRing,
+                    View.SCALE_Y,
+                    1.2f,
+                    1f,
+                    1.08f
+                ),
+                ObjectAnimator.ofFloat(
+                    focusRing,
+                    View.ALPHA,
+                    1f,
+                    1f,
+                    0f
+                )
+            )
+
+            duration = 750L
+
+            interpolator =
+                DecelerateInterpolator()
+
+            start()
+        }
     }
 
     private fun topButton(
@@ -1050,7 +1551,7 @@ class MainActivity : ComponentActivity() {
             background =
                 roundBackground(
                     Color.argb(
-                        105,
+                        75,
                         0,
                         0,
                         0
@@ -1059,9 +1560,9 @@ class MainActivity : ComponentActivity() {
                 )
 
             setPadding(
-                8,
+                6,
                 0,
-                8,
+                6,
                 0
             )
 
@@ -1100,30 +1601,25 @@ class MainActivity : ComponentActivity() {
             textSize = 9f
 
             setTextColor(
-                Color.WHITE
+                Color.argb(
+                    185,
+                    255,
+                    255,
+                    255
+                )
             )
 
             background =
-                roundBackground(
-                    Color.argb(
-                        65,
-                        255,
-                        255,
-                        255
-                    ),
-                    999f
+                ColorDrawableCompat(
+                    Color.TRANSPARENT
                 )
 
             setPadding(
-                8,
+                5,
                 0,
-                8,
+                5,
                 0
             )
-
-            setOnClickListener {
-                action()
-            }
 
             layoutParams =
                 LinearLayout.LayoutParams(
@@ -1133,13 +1629,119 @@ class MainActivity : ComponentActivity() {
                 ).apply {
 
                     setMargins(
-                        2,
+                        1,
                         0,
-                        2,
+                        1,
                         0
                     )
                 }
+
+            setOnClickListener {
+                action()
+            }
         }
+    }
+
+    private fun ColorDrawableCompat(
+        color: Int
+    ): GradientDrawable {
+
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = 999f
+        }
+    }
+
+    private fun updateModeUi(
+        selected: String
+    ) {
+
+        for (
+            (name, button) in modeButtons
+        ) {
+
+            if (name == selected) {
+
+                button.setTextColor(
+                    Color.WHITE
+                )
+
+                button.background =
+                    roundBackground(
+                        Color.argb(
+                            125,
+                            255,
+                            255,
+                            255
+                        ),
+                        999f
+                    )
+
+                button.animate()
+                    .scaleX(1.06f)
+                    .scaleY(1.06f)
+                    .setDuration(180L)
+                    .start()
+
+            } else {
+
+                button.setTextColor(
+                    Color.argb(
+                        165,
+                        255,
+                        255,
+                        255
+                    )
+                )
+
+                button.background =
+                    ColorDrawableCompat(
+                        Color.TRANSPARENT
+                    )
+
+                button.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(180L)
+                    .start()
+            }
+        }
+    }
+
+    private fun animateButton(
+        view: View
+    ) {
+
+        view.animate()
+            .scaleX(0.88f)
+            .scaleY(0.88f)
+            .setDuration(80L)
+            .withEndAction {
+
+                view.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(130L)
+                    .start()
+            }
+            .start()
+    }
+
+    private fun animateShutter() {
+
+        shutterButton.animate()
+            .scaleX(0.86f)
+            .scaleY(0.86f)
+            .setDuration(80L)
+            .withEndAction {
+
+                shutterButton.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(150L)
+                    .start()
+            }
+            .start()
     }
 
     private fun roundBackground(
@@ -1168,9 +1770,9 @@ class MainActivity : ComponentActivity() {
             )
 
             setStroke(
-                5,
+                4,
                 Color.argb(
-                    210,
+                    220,
                     255,
                     255,
                     255
@@ -1179,19 +1781,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // =========================================================
+    // QUICK ZOOM
+    // =========================================================
+
     private fun createQuickZoomButtons() {
 
-        zoomButtonsLayout
-            .removeAllViews()
-
+        zoomButtonsLayout.removeAllViews()
         quickZoomButtons.clear()
 
         val levels =
             listOf(
                 0.5f,
-                1.0f,
-                2.0f,
-                5.0f
+                1f,
+                2f,
+                5f
             )
 
         for (level in levels) {
@@ -1210,66 +1814,52 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                    textSize = 11f
+                    textSize = 10f
 
                     setTextColor(
                         Color.WHITE
                     )
 
                     background =
-                        roundBackground(
-                            Color.argb(
-                                75,
-                                255,
-                                255,
-                                255
-                            ),
-                            999f
+                        ColorDrawableCompat(
+                            Color.TRANSPARENT
                         )
 
                     setPadding(
-                        5,
+                        7,
                         0,
-                        5,
+                        7,
                         0
                     )
 
                     setOnClickListener {
+
+                        animateButton(
+                            this
+                        )
+
                         applyQuickZoom(
                             level
                         )
                     }
                 }
 
-            val params =
-                LinearLayout.LayoutParams(
-                    58,
-                    42
-                )
-
-            params.setMargins(
-                3,
-                2,
-                3,
-                2
-            )
-
             zoomButtonsLayout.addView(
                 button,
-                params
+                LinearLayout.LayoutParams(
+                    52,
+                    37
+                )
             )
 
-            quickZoomButtons.add(
+            quickZoomButtons[level] =
                 button
-            )
         }
     }
 
-    /*
-     * =========================================================
-     * CAMERA START
-     * =========================================================
-     */
+    // =========================================================
+    // CAMERA START
+    // =========================================================
 
     private fun startCamera() {
 
@@ -1344,10 +1934,6 @@ class MainActivity : ComponentActivity() {
                         .setFlashMode(
                             flashMode
                         )
-
-                /*
-                 * ASTRO
-                 */
 
                 if (
                     isAstroMode &&
@@ -1437,10 +2023,17 @@ class MainActivity : ComponentActivity() {
                     video
 
                 isCameraReady = true
-                shutterButton.isEnabled =
-                    true
+                shutterButton.isEnabled = true
 
                 updateZoomControls()
+
+                camera?.cameraInfo
+                    ?.zoomState
+                    ?.observe(
+                        this
+                    ) {
+                        updateZoomControls()
+                    }
 
             } catch (e: Exception) {
 
@@ -1461,17 +2054,13 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /*
-     * =========================================================
-     * MODE SWITCHING
-     * =========================================================
-     */
+    // =========================================================
+    // MODES
+    // =========================================================
 
     private fun setPhotoMode() {
 
-        if (isRecording) {
-            return
-        }
+        if (isRecording) return
 
         isVideoMode = false
         isAstroMode = false
@@ -1479,14 +2068,14 @@ class MainActivity : ComponentActivity() {
         statusText.text =
             "NINJACAM • PHOTO"
 
+        updateModeUi("PHOTO")
+
         restartCameraSafely()
     }
 
     private fun setVideoMode() {
 
-        if (isRecording) {
-            return
-        }
+        if (isRecording) return
 
         isVideoMode = true
         isAstroMode = false
@@ -1494,14 +2083,14 @@ class MainActivity : ComponentActivity() {
         statusText.text =
             "NINJACAM • VIDEO"
 
+        updateModeUi("VIDEO")
+
         restartCameraSafely()
     }
 
     private fun setAstroMode() {
 
-        if (isRecording) {
-            return
-        }
+        if (isRecording) return
 
         if (isFrontCamera) {
             isFrontCamera = false
@@ -1512,6 +2101,8 @@ class MainActivity : ComponentActivity() {
 
         statusText.text =
             "NINJACAM • ASTRO"
+
+        updateModeUi("ASTRO")
 
         restartCameraSafely()
     }
@@ -1532,14 +2123,12 @@ class MainActivity : ComponentActivity() {
                 startCamera()
             }
 
-        }, 120)
+        }, 160L)
     }
 
-    /*
-     * =========================================================
-     * CAMERA SWITCH
-     * =========================================================
-     */
+    // =========================================================
+    // SWITCH CAMERA
+    // =========================================================
 
     private fun switchCamera() {
 
@@ -1573,8 +2162,7 @@ class MainActivity : ComponentActivity() {
             }
 
         val provider =
-            cameraProvider
-                ?: return
+            cameraProvider ?: return
 
         if (
             !provider.hasCamera(
@@ -1591,14 +2179,24 @@ class MainActivity : ComponentActivity() {
 
         isFrontCamera = next
 
-        restartCameraSafely()
+        previewView.animate()
+            .alpha(0.35f)
+            .setDuration(100L)
+            .withEndAction {
+
+                previewView.animate()
+                    .alpha(1f)
+                    .setDuration(250L)
+                    .start()
+
+                restartCameraSafely()
+            }
+            .start()
     }
 
-    /*
-     * =========================================================
-     * FLASH
-     * =========================================================
-     */
+    // =========================================================
+    // FLASH
+    // =========================================================
 
     private fun cycleFlash() {
 
@@ -1628,16 +2226,18 @@ class MainActivity : ComponentActivity() {
                     "⚡ OFF"
             }
 
+        animateButton(
+            flashButton
+        )
+
         if (isCameraReady) {
             restartCameraSafely()
         }
     }
 
-    /*
-     * =========================================================
-     * TIMER
-     * =========================================================
-     */
+    // =========================================================
+    // TIMER
+    // =========================================================
 
     private fun cycleTimer() {
 
@@ -1645,28 +2245,27 @@ class MainActivity : ComponentActivity() {
             when (timerSeconds) {
 
                 0 -> 3
-
                 3 -> 5
-
                 else -> 0
             }
 
         timerButton.text =
             when (timerSeconds) {
 
-                0 ->
-                    "TIMER"
+                0 -> "◷"
 
                 else ->
                     "⏱ ${timerSeconds}s"
             }
+
+        animateButton(
+            timerButton
+        )
     }
 
-    /*
-     * =========================================================
-     * SHUTTER
-     * =========================================================
-     */
+    // =========================================================
+    // SHUTTER
+    // =========================================================
 
     private fun onShutterPressed() {
 
@@ -1710,17 +2309,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /*
-     * =========================================================
-     * PHOTO
-     * =========================================================
-     */
+    // =========================================================
+    // PHOTO
+    // =========================================================
 
     private fun takePhoto() {
 
         val capture =
-            imageCapture
-                ?: return
+            imageCapture ?: return
 
         shutterButton.isEnabled =
             false
@@ -1730,6 +2326,71 @@ class MainActivity : ComponentActivity() {
             showMessage(
                 "Astro exposure 4 detik…"
             )
+        }
+
+        // Simulasi shutter screen flash
+        val flashOverlay =
+            View(this).apply {
+
+                setBackgroundColor(
+                    Color.WHITE
+                )
+
+                alpha = 0f
+            }
+
+        rootContainer.addView(
+            flashOverlay,
+            FrameLayout.LayoutParams(
+                -1,
+                -1
+            )
+        )
+
+        ObjectAnimator.ofFloat(
+            flashOverlay,
+            View.ALPHA,
+            0f,
+            0.75f,
+            0f
+        ).apply {
+
+            duration = 220L
+
+            addListener(
+                object : Animator.AnimatorListener {
+
+                    override fun onAnimationStart(
+                        animation: Animator
+                    ) {
+                    }
+
+                    override fun onAnimationEnd(
+                        animation: Animator
+                    ) {
+                        rootContainer
+                            .removeView(
+                                flashOverlay
+                            )
+                    }
+
+                    override fun onAnimationCancel(
+                        animation: Animator
+                    ) {
+                        rootContainer
+                            .removeView(
+                                flashOverlay
+                            )
+                    }
+
+                    override fun onAnimationRepeat(
+                        animation: Animator
+                    ) {
+                    }
+                }
+            )
+
+            start()
         }
 
         val values =
@@ -1753,7 +2414,6 @@ class MainActivity : ComponentActivity() {
                 put(
                     MediaStore.Images.Media
                         .MIME_TYPE,
-
                     "image/jpeg"
                 )
 
@@ -1762,7 +2422,6 @@ class MainActivity : ComponentActivity() {
                     put(
                         MediaStore.Images.Media
                             .RELATIVE_PATH,
-
                         "Pictures/NinjaCam"
                     )
                 }
@@ -1824,11 +2483,9 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    /*
-     * =========================================================
-     * AUDIO PERMISSION
-     * =========================================================
-     */
+    // =========================================================
+    // AUDIO
+    // =========================================================
 
     private fun requestAudioAndRecord() {
 
@@ -1848,19 +2505,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /*
-     * =========================================================
-     * VIDEO
-     * =========================================================
-     */
+    // =========================================================
+    // VIDEO
+    // =========================================================
 
     private fun startVideoRecording(
         withAudio: Boolean
     ) {
 
         val video =
-            videoCapture
-                ?: return
+            videoCapture ?: return
 
         val values =
             ContentValues().apply {
@@ -1877,7 +2531,6 @@ class MainActivity : ComponentActivity() {
                 put(
                     MediaStore.Video.Media
                         .MIME_TYPE,
-
                     "video/mp4"
                 )
 
@@ -1886,7 +2539,6 @@ class MainActivity : ComponentActivity() {
                     put(
                         MediaStore.Video.Media
                             .RELATIVE_PATH,
-
                         "Movies/NinjaCam"
                     )
                 }
@@ -1912,17 +2564,14 @@ class MainActivity : ComponentActivity() {
                     )
 
             if (withAudio) {
-
                 pending =
                     pending.withAudioEnabled()
             }
 
             recording =
                 pending.start(
-
                     ContextCompat
                         .getMainExecutor(this)
-
                 ) { event ->
 
                     when (event) {
@@ -1991,11 +2640,9 @@ class MainActivity : ComponentActivity() {
         recording?.stop()
     }
 
-    /*
-     * =========================================================
-     * ZOOM
-     * =========================================================
-     */
+    // =========================================================
+    // ZOOM
+    // =========================================================
 
     private fun updateZoomControls() {
 
@@ -2012,9 +2659,12 @@ class MainActivity : ComponentActivity() {
         val maxZoom =
             state.maxZoomRatio
 
+        currentZoom =
+            state.zoomRatio
+
         zoomSlider.progress =
             calculateZoomProgress(
-                minZoom
+                currentZoom
             )
 
         zoomSlider.isEnabled =
@@ -2024,39 +2674,51 @@ class MainActivity : ComponentActivity() {
             String.format(
                 Locale.US,
                 "%.1f×",
-                minZoom
+                currentZoom
             )
 
         for (
-            button in quickZoomButtons
+            (level, button)
+            in quickZoomButtons
         ) {
 
-            val level =
-                when (
-                    button.text.toString()
-                ) {
-
-                    "0.5×" -> 0.5f
-                    "1×" -> 1.0f
-                    "2×" -> 2.0f
-                    "5×" -> 5.0f
-
-                    else -> 1.0f
-                }
-
+            // Unsupported zoom disembunyikan.
             val available =
                 level >= minZoom &&
                     level <= maxZoom
 
-            button.isEnabled =
-                available
-
-            button.alpha =
+            button.visibility =
                 if (available) {
-                    1f
+                    View.VISIBLE
                 } else {
-                    0.3f
+                    View.GONE
                 }
+
+            if (
+                available &&
+                kotlin.math.abs(
+                    currentZoom - level
+                ) < 0.08f
+            ) {
+
+                button.background =
+                    roundBackground(
+                        Color.argb(
+                            130,
+                            255,
+                            255,
+                            255
+                        ),
+                        999f
+                    )
+
+            } else {
+
+                button.background =
+                    ColorDrawableCompat(
+                        Color.TRANSPARENT
+                    )
+            }
         }
     }
 
@@ -2098,15 +2760,6 @@ class MainActivity : ComponentActivity() {
             level < state.minZoomRatio ||
             level > state.maxZoomRatio
         ) {
-
-            showMessage(
-                String.format(
-                    Locale.US,
-                    "Zoom %.1f× tidak tersedia",
-                    level
-                )
-            )
-
             return
         }
 
@@ -2169,6 +2822,9 @@ class MainActivity : ComponentActivity() {
                 state.maxZoomRatio
             )
 
+        currentZoom =
+            safeRatio
+
         camera
             ?.cameraControl
             ?.setZoomRatio(
@@ -2181,13 +2837,13 @@ class MainActivity : ComponentActivity() {
                 "%.1f×",
                 safeRatio
             )
+
+        updateZoomControls()
     }
 
-    /*
-     * =========================================================
-     * MESSAGE
-     * =========================================================
-     */
+    // =========================================================
+    // MESSAGE
+    // =========================================================
 
     private fun showMessage(
         message: String
@@ -2207,79 +2863,5 @@ class MainActivity : ComponentActivity() {
         cameraProvider?.unbindAll()
 
         super.onDestroy()
-    }
-
-    /*
-     * =========================================================
-     * GRID
-     * =========================================================
-     */
-
-    private class GridOverlay(
-        context: android.content.Context
-    ) : View(context) {
-
-        private val paint =
-            android.graphics.Paint().apply {
-
-                color =
-                    Color.argb(
-                        120,
-                        255,
-                        255,
-                        255
-                    )
-
-                strokeWidth = 1.5f
-
-                style =
-                    android.graphics.Paint.Style.STROKE
-            }
-
-        override fun onDraw(
-            canvas:
-            android.graphics.Canvas
-        ) {
-
-            super.onDraw(canvas)
-
-            val width =
-                width.toFloat()
-
-            val height =
-                height.toFloat()
-
-            canvas.drawLine(
-                width / 3f,
-                0f,
-                width / 3f,
-                height,
-                paint
-            )
-
-            canvas.drawLine(
-                width * 2f / 3f,
-                0f,
-                width * 2f / 3f,
-                height,
-                paint
-            )
-
-            canvas.drawLine(
-                0f,
-                height / 3f,
-                width,
-                height / 3f,
-                paint
-            )
-
-            canvas.drawLine(
-                0f,
-                height * 2f / 3f,
-                width,
-                height * 2f / 3f,
-                paint
-            )
-        }
     }
 }
