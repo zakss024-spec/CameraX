@@ -1,6 +1,9 @@
 package com.ninjacam
 
 import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -13,6 +16,7 @@ import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -113,17 +117,11 @@ class MainActivity : ComponentActivity() {
 
         createCameraUi()
 
-        if (
-            hasPermission(
-                Manifest.permission.CAMERA
-            )
-        ) {
-            startCamera()
-        } else {
-            cameraPermission.launch(
-                Manifest.permission.CAMERA
-            )
-        }
+        /*
+         * Loading screen ditampilkan terlebih dahulu.
+         * Setelah selesai baru kamera dimulai.
+         */
+        showLoadingScreen()
     }
 
     private fun hasPermission(
@@ -136,11 +134,396 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    /*
+     * =========================================================
+     * LOADING SCREEN
+     * =========================================================
+     */
+
+    private fun showLoadingScreen() {
+
+        val root =
+            findViewById<FrameLayout>(
+                android.R.id.content
+            )
+
+        val loading =
+            FrameLayout(this).apply {
+
+                setBackgroundColor(
+                    Color.BLACK
+                )
+
+                alpha = 1f
+            }
+
+        /*
+         * Logo / nama aplikasi
+         */
+
+        val logoText =
+            TextView(this).apply {
+
+                text = "NinjaCam"
+
+                textSize = 34f
+
+                gravity = Gravity.CENTER
+
+                setTextColor(
+                    Color.WHITE
+                )
+
+                setShadowLayer(
+                    14f,
+                    0f,
+                    0f,
+                    Color.WHITE
+                )
+
+                typeface =
+                    android.graphics.Typeface
+                        .create(
+                            "sans-serif",
+                            android.graphics.Typeface
+                                .BOLD
+                        )
+            }
+
+        loading.addView(
+            logoText,
+            FrameLayout.LayoutParams(
+                -1,
+                70,
+                Gravity.CENTER
+            ).apply {
+                bottomMargin = 100
+            }
+        )
+
+        /*
+         * Credit
+         */
+
+        val developerText =
+            TextView(this).apply {
+
+                text =
+                    "Developer: ZackssX"
+
+                textSize = 12f
+
+                gravity = Gravity.CENTER
+
+                setTextColor(
+                    Color.argb(
+                        210,
+                        255,
+                        255,
+                        255
+                    )
+                )
+            }
+
+        loading.addView(
+            developerText,
+            FrameLayout.LayoutParams(
+                -1,
+                40,
+                Gravity.CENTER
+            ).apply {
+                topMargin = 115
+            }
+        )
+
+        /*
+         * Tulisan kecil tambahan
+         */
+
+        val loveText =
+            TextView(this).apply {
+
+                text =
+                    "Fahiraa My Loveee"
+
+                textSize = 10f
+
+                gravity = Gravity.CENTER
+
+                setTextColor(
+                    Color.argb(
+                        150,
+                        255,
+                        255,
+                        255
+                    )
+                )
+            }
+
+        loading.addView(
+            loveText,
+            FrameLayout.LayoutParams(
+                -1,
+                30,
+                Gravity.CENTER
+            ).apply {
+                topMargin = 160
+            }
+        )
+
+        /*
+         * Flash overlay.
+         *
+         * Bentuk lingkaran putih yang akan
+         * membesar dan menyebar memenuhi layar.
+         */
+
+        val flash =
+            View(this).apply {
+
+                background =
+                    GradientDrawable().apply {
+
+                        shape =
+                            GradientDrawable.OVAL
+
+                        setColor(
+                            Color.WHITE
+                        )
+                    }
+
+                alpha = 0f
+
+                scaleX = 0.05f
+                scaleY = 0.05f
+            }
+
+        val flashSize =
+            resources.displayMetrics.widthPixels * 2
+
+        loading.addView(
+            flash,
+            FrameLayout.LayoutParams(
+                flashSize,
+                flashSize,
+                Gravity.CENTER
+            )
+        )
+
+        root.addView(
+            loading,
+            ViewGroup.LayoutParams(
+                -1,
+                -1
+            )
+        )
+
+        /*
+         * Animasi cekrek teratur.
+         *
+         * Tiga flash singkat:
+         * 1. kecil
+         * 2. sedang
+         * 3. lebih lebar
+         */
+
+        val flashHandler =
+            Handler(
+                Looper.getMainLooper()
+            )
+
+        fun doFlash(
+            delay: Long,
+            duration: Long
+        ) {
+
+            flashHandler.postDelayed({
+
+                if (
+                    isFinishing ||
+                    isDestroyed
+                ) {
+                    return@postDelayed
+                }
+
+                flash.alpha = 0f
+                flash.scaleX = 0.05f
+                flash.scaleY = 0.05f
+
+                val alpha =
+                    ObjectAnimator.ofFloat(
+                        flash,
+                        View.ALPHA,
+                        0f,
+                        0.82f,
+                        0f
+                    ).apply {
+
+                        this.duration =
+                            duration
+
+                        interpolator =
+                            AccelerateDecelerateInterpolator()
+                    }
+
+                val scaleX =
+                    ObjectAnimator.ofFloat(
+                        flash,
+                        View.SCALE_X,
+                        0.05f,
+                        0.75f,
+                        1.25f
+                    ).apply {
+
+                        this.duration =
+                            duration
+
+                        interpolator =
+                            AccelerateDecelerateInterpolator()
+                    }
+
+                val scaleY =
+                    ObjectAnimator.ofFloat(
+                        flash,
+                        View.SCALE_Y,
+                        0.05f,
+                        0.75f,
+                        1.25f
+                    ).apply {
+
+                        this.duration =
+                            duration
+
+                        interpolator =
+                            AccelerateDecelerateInterpolator()
+                    }
+
+                AnimatorSet().apply {
+
+                    playTogether(
+                        alpha,
+                        scaleX,
+                        scaleY
+                    )
+
+                    start()
+                }
+
+            }, delay)
+        }
+
+        doFlash(
+            delay = 120L,
+            duration = 190L
+        )
+
+        doFlash(
+            delay = 390L,
+            duration = 190L
+        )
+
+        doFlash(
+            delay = 660L,
+            duration = 190L
+        )
+
+        /*
+         * Setelah loading selesai:
+         * hapus loading lalu mulai kamera.
+         */
+
+        flashHandler.postDelayed({
+
+            if (
+                isFinishing ||
+                isDestroyed
+            ) {
+                return@postDelayed
+            }
+
+            val fade =
+                ObjectAnimator.ofFloat(
+                    loading,
+                    View.ALPHA,
+                    1f,
+                    0f
+                ).apply {
+
+                    this.duration = 180L
+                }
+
+            fade.addListener(
+                object :
+                    android.animation.Animator
+                        .AnimatorListener {
+
+                    override fun onAnimationStart(
+                        animation:
+                        android.animation.Animator
+                    ) {
+                    }
+
+                    override fun onAnimationEnd(
+                        animation:
+                        android.animation.Animator
+                    ) {
+
+                        root.removeView(
+                            loading
+                        )
+
+                        continueToCamera()
+                    }
+
+                    override fun onAnimationCancel(
+                        animation:
+                        android.animation.Animator
+                    ) {
+                    }
+
+                    override fun onAnimationRepeat(
+                        animation:
+                        android.animation.Animator
+                    ) {
+                    }
+                }
+            )
+
+            fade.start()
+
+        }, 1050L)
+    }
+
+    private fun continueToCamera() {
+
+        if (
+            hasPermission(
+                Manifest.permission.CAMERA
+            )
+        ) {
+
+            startCamera()
+
+        } else {
+
+            cameraPermission.launch(
+                Manifest.permission.CAMERA
+            )
+        }
+    }
+
+    /*
+     * =========================================================
+     * CAMERA UI
+     * =========================================================
+     */
+
     private fun createCameraUi() {
 
         val root = FrameLayout(this)
 
         previewView = PreviewView(this).apply {
+
             scaleType =
                 PreviewView.ScaleType.FILL_CENTER
 
@@ -213,6 +596,7 @@ class MainActivity : ComponentActivity() {
 
         hdrButton =
             topButton("HDR") {
+
                 hdrEnabled =
                     !hdrEnabled
 
@@ -568,7 +952,6 @@ class MainActivity : ComponentActivity() {
 
         /*
          * SWITCH CAMERA
-         * DI SEBELAH KANAN SHUTTER
          */
 
         switchButton =
@@ -883,7 +1266,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * CAMERA START
+     * =========================================================
      */
 
     private fun startCamera() {
@@ -962,8 +1347,6 @@ class MainActivity : ComponentActivity() {
 
                 /*
                  * ASTRO
-                 *
-                 * Hanya aktif untuk kamera belakang.
                  */
 
                 if (
@@ -1015,11 +1398,6 @@ class MainActivity : ComponentActivity() {
                     } catch (
                         ignored: Exception
                     ) {
-                        /*
-                         * Kalau Astro Camera2
-                         * tidak tersedia, kamera
-                         * tetap dibuka normal.
-                         */
                     }
                 }
 
@@ -1040,11 +1418,6 @@ class MainActivity : ComponentActivity() {
                         .withOutput(
                             recorder
                         )
-
-                /*
-                 * Unbind hanya setelah semua
-                 * use case berhasil dibuat.
-                 */
 
                 provider.unbindAll()
 
@@ -1089,7 +1462,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * MODE SWITCHING
+     * =========================================================
      */
 
     private fun setPhotoMode() {
@@ -1146,11 +1521,6 @@ class MainActivity : ComponentActivity() {
         isCameraReady = false
         shutterButton.isEnabled = false
 
-        /*
-         * Jangan langsung memanggil
-         * startCamera berkali-kali.
-         */
-
         Handler(
             Looper.getMainLooper()
         ).postDelayed({
@@ -1166,7 +1536,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * CAMERA SWITCH
+     * =========================================================
      */
 
     private fun switchCamera() {
@@ -1223,7 +1595,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * FLASH
+     * =========================================================
      */
 
     private fun cycleFlash() {
@@ -1260,7 +1634,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * TIMER
+     * =========================================================
      */
 
     private fun cycleTimer() {
@@ -1287,7 +1663,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * SHUTTER
+     * =========================================================
      */
 
     private fun onShutterPressed() {
@@ -1333,7 +1711,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * PHOTO
+     * =========================================================
      */
 
     private fun takePhoto() {
@@ -1445,7 +1825,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * AUDIO PERMISSION
+     * =========================================================
      */
 
     private fun requestAudioAndRecord() {
@@ -1467,7 +1849,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * VIDEO
+     * =========================================================
      */
 
     private fun startVideoRecording(
@@ -1608,7 +1992,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
+     * =========================================================
      * ZOOM
+     * =========================================================
      */
 
     private fun updateZoomControls() {
@@ -1797,6 +2183,12 @@ class MainActivity : ComponentActivity() {
             )
     }
 
+    /*
+     * =========================================================
+     * MESSAGE
+     * =========================================================
+     */
+
     private fun showMessage(
         message: String
     ) {
@@ -1818,10 +2210,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /*
-     * GRID CLASS
-     *
-     * Disiapkan untuk grid kamera
-     * pada tahap UI berikutnya.
+     * =========================================================
+     * GRID
+     * =========================================================
      */
 
     private class GridOverlay(
