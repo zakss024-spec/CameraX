@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
@@ -17,8 +16,11 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
+
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -34,6 +36,7 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -58,6 +61,7 @@ class MainActivity : ComponentActivity() {
 
     private var isFrontCamera = false
     private var isVideoMode = false
+    private var isAstroMode = false
     private var isCameraReady = false
     private var isRecording = false
 
@@ -117,7 +121,10 @@ class MainActivity : ComponentActivity() {
 
         root.addView(
             previewView,
-            FrameLayout.LayoutParams(-1, -1)
+            FrameLayout.LayoutParams(
+                -1,
+                -1
+            )
         )
 
         val topBar = LinearLayout(this).apply {
@@ -134,18 +141,34 @@ class MainActivity : ComponentActivity() {
 
         topBar.addView(
             statusText,
-            LinearLayout.LayoutParams(0, 55, 1f)
+            LinearLayout.LayoutParams(
+                0,
+                55,
+                1f
+            )
         )
 
         switchButton = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_camera)
+
+            setImageResource(
+                android.R.drawable.ic_menu_camera
+            )
+
             setColorFilter(Color.WHITE)
+
             background = roundBackground(
                 Color.argb(115, 0, 0, 0),
                 999f
             )
+
             contentDescription = "Ganti kamera"
-            setPadding(14, 14, 14, 14)
+
+            setPadding(
+                14,
+                14,
+                14,
+                14
+            )
 
             setOnClickListener {
                 switchCamera()
@@ -154,7 +177,10 @@ class MainActivity : ComponentActivity() {
 
         topBar.addView(
             switchButton,
-            LinearLayout.LayoutParams(52, 52)
+            LinearLayout.LayoutParams(
+                52,
+                52
+            )
         )
 
         root.addView(
@@ -167,9 +193,16 @@ class MainActivity : ComponentActivity() {
         )
 
         bottomPanel = LinearLayout(this).apply {
+
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(18, 12, 18, 24)
+
+            setPadding(
+                18,
+                12,
+                18,
+                24
+            )
 
             background = roundBackground(
                 Color.argb(155, 0, 0, 0),
@@ -178,6 +211,7 @@ class MainActivity : ComponentActivity() {
         }
 
         zoomText = TextView(this).apply {
+
             text = "1.0×"
             textSize = 16f
             gravity = Gravity.CENTER
@@ -185,16 +219,19 @@ class MainActivity : ComponentActivity() {
         }
 
         zoomButtonsLayout = LinearLayout(this).apply {
+
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
 
         zoomSlider = SeekBar(this).apply {
+
             max = 1000
             progress = 0
 
             setOnSeekBarChangeListener(
-                object : SeekBar.OnSeekBarChangeListener {
+                object :
+                    SeekBar.OnSeekBarChangeListener {
 
                     override fun onProgressChanged(
                         seekBar: SeekBar?,
@@ -220,24 +257,34 @@ class MainActivity : ComponentActivity() {
         }
 
         modeButton = Button(this).apply {
+
             text = "PHOTO"
             textSize = 13f
             setTextColor(Color.WHITE)
+
             background = roundBackground(
                 Color.argb(105, 255, 255, 255),
                 999f
             )
-            setPadding(28, 0, 28, 0)
+
+            setPadding(
+                28,
+                0,
+                28,
+                0
+            )
 
             setOnClickListener {
-                toggleMode()
+                cycleMode()
             }
         }
 
         shutterButton = Button(this).apply {
+
             text = "●"
             textSize = 27f
             setTextColor(Color.WHITE)
+
             background = shutterBackground()
 
             setOnClickListener {
@@ -247,17 +294,26 @@ class MainActivity : ComponentActivity() {
 
         bottomPanel.addView(
             zoomText,
-            LinearLayout.LayoutParams(-1, 32)
+            LinearLayout.LayoutParams(
+                -1,
+                32
+            )
         )
 
         bottomPanel.addView(
             zoomButtonsLayout,
-            LinearLayout.LayoutParams(-1, 46)
+            LinearLayout.LayoutParams(
+                -1,
+                46
+            )
         )
 
         bottomPanel.addView(
             zoomSlider,
-            LinearLayout.LayoutParams(-1, 42)
+            LinearLayout.LayoutParams(
+                -1,
+                42
+            )
         )
 
         bottomPanel.addView(
@@ -283,7 +339,10 @@ class MainActivity : ComponentActivity() {
 
         bottomPanel.addView(
             shutterRow,
-            LinearLayout.LayoutParams(-1, 92)
+            LinearLayout.LayoutParams(
+                -1,
+                92
+            )
         )
 
         root.addView(
@@ -293,7 +352,12 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM
             ).apply {
-                setMargins(10, 0, 10, 10)
+                setMargins(
+                    10,
+                    0,
+                    10,
+                    10
+                )
             }
         )
 
@@ -306,6 +370,7 @@ class MainActivity : ComponentActivity() {
         color: Int,
         radius: Float
     ): GradientDrawable {
+
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = radius
@@ -313,12 +378,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shutterBackground(): GradientDrawable {
+
         return GradientDrawable().apply {
+
             shape = GradientDrawable.OVAL
+
             setColor(Color.WHITE)
+
             setStroke(
                 5,
-                Color.argb(190, 255, 255, 255)
+                Color.argb(
+                    190,
+                    255,
+                    255,
+                    255
+                )
             )
         }
     }
@@ -328,13 +402,13 @@ class MainActivity : ComponentActivity() {
         zoomButtonsLayout.removeAllViews()
         quickZoomButtons.clear()
 
-        val zoomLevels = listOf(
+        val levels = listOf(
             1.0f,
             2.0f,
             5.0f
         )
 
-        for (level in zoomLevels) {
+        for (level in levels) {
 
             val button = Button(this).apply {
 
@@ -348,23 +422,39 @@ class MainActivity : ComponentActivity() {
                 setTextColor(Color.WHITE)
 
                 background = roundBackground(
-                    Color.argb(85, 255, 255, 255),
+                    Color.argb(
+                        85,
+                        255,
+                        255,
+                        255
+                    ),
                     999f
                 )
 
-                setPadding(8, 0, 8, 0)
+                setPadding(
+                    8,
+                    0,
+                    8,
+                    0
+                )
 
                 setOnClickListener {
                     applyQuickZoom(level)
                 }
             }
 
-            val params = LinearLayout.LayoutParams(
-                62,
-                42
-            )
+            val params =
+                LinearLayout.LayoutParams(
+                    62,
+                    42
+                )
 
-            params.setMargins(5, 2, 5, 2)
+            params.setMargins(
+                5,
+                2,
+                5,
+                2
+            )
 
             zoomButtonsLayout.addView(
                 button,
@@ -381,13 +471,16 @@ class MainActivity : ComponentActivity() {
         shutterButton.isEnabled = false
 
         val future =
-            ProcessCameraProvider.getInstance(this)
+            ProcessCameraProvider.getInstance(
+                this
+            )
 
         future.addListener({
 
             try {
 
                 val provider = future.get()
+
                 cameraProvider = provider
 
                 val selector =
@@ -399,7 +492,9 @@ class MainActivity : ComponentActivity() {
 
                 if (!provider.hasCamera(selector)) {
 
-                    showMessage("Kamera tidak tersedia")
+                    showMessage(
+                        "Kamera tidak tersedia"
+                    )
 
                     isFrontCamera = false
                     shutterButton.isEnabled = true
@@ -411,26 +506,80 @@ class MainActivity : ComponentActivity() {
                     Preview.Builder()
                         .build()
                         .also {
+
                             it.surfaceProvider =
-                                previewView.surfaceProvider
+                                previewView
+                                    .surfaceProvider
                         }
 
-                val capture =
+                val captureBuilder =
                     ImageCapture.Builder()
                         .setCaptureMode(
-                            ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+                            ImageCapture
+                                .CAPTURE_MODE_MINIMIZE_LATENCY
                         )
-                        .build()
+
+                /*
+                 * Astro mode dasar.
+                 *
+                 * Hanya diterapkan pada kamera belakang.
+                 * Jika hardware tidak mendukung request,
+                 * CameraX akan gagal dan kita kembali
+                 * memberi pesan kepada pengguna.
+                 */
+                if (
+                    isAstroMode &&
+                    !isFrontCamera
+                ) {
+
+                    val extender =
+                        Camera2Interop.Extender(
+                            captureBuilder
+                        )
+
+                    extender.setCaptureRequestOption(
+                        android.hardware.camera2
+                            .CaptureRequest
+                            .CONTROL_AE_MODE,
+
+                        android.hardware.camera2
+                            .CaptureRequest
+                            .CONTROL_AE_MODE_OFF
+                    )
+
+                    extender.setCaptureRequestOption(
+                        android.hardware.camera2
+                            .CaptureRequest
+                            .SENSOR_EXPOSURE_TIME,
+
+                        4_000_000_000L
+                    )
+
+                    extender.setCaptureRequestOption(
+                        android.hardware.camera2
+                            .CaptureRequest
+                            .SENSOR_SENSITIVITY,
+
+                        800
+                    )
+                }
+
+                val capture =
+                    captureBuilder.build()
 
                 val recorder =
                     Recorder.Builder()
                         .setQualitySelector(
-                            QualitySelector.from(Quality.HD)
+                            QualitySelector.from(
+                                Quality.HD
+                            )
                         )
                         .build()
 
                 val video =
-                    VideoCapture.withOutput(recorder)
+                    VideoCapture.withOutput(
+                        recorder
+                    )
 
                 provider.unbindAll()
 
@@ -449,11 +598,34 @@ class MainActivity : ComponentActivity() {
                 isCameraReady = true
                 shutterButton.isEnabled = true
 
+                createQuickZoomButtons()
                 updateZoomControls()
 
             } catch (e: Exception) {
 
-                showMessage("Gagal membuka kamera")
+                isCameraReady = false
+
+                shutterButton.isEnabled = false
+
+                showMessage(
+                    if (isAstroMode) {
+                        "Astro tidak didukung kamera ini"
+                    } else {
+                        "Gagal membuka kamera"
+                    }
+                )
+
+                if (isAstroMode) {
+
+                    isAstroMode = false
+                    isVideoMode = false
+
+                    modeButton.text = "PHOTO"
+                    statusText.text =
+                        "NINJACAM • PHOTO"
+
+                    startCamera()
+                }
             }
 
         }, ContextCompat.getMainExecutor(this))
@@ -461,9 +633,26 @@ class MainActivity : ComponentActivity() {
 
     private fun switchCamera() {
 
-        if (!isCameraReady || isRecording) return
+        if (
+            !isCameraReady ||
+            isRecording
+        ) {
+            return
+        }
 
         val next = !isFrontCamera
+
+        if (
+            isAstroMode &&
+            next
+        ) {
+
+            showMessage(
+                "Astro memakai kamera belakang"
+            )
+
+            return
+        }
 
         val selector =
             if (next) {
@@ -475,36 +664,79 @@ class MainActivity : ComponentActivity() {
         val provider =
             cameraProvider ?: return
 
-        if (!provider.hasCamera(selector)) {
-            showMessage("Kamera tidak tersedia")
+        if (
+            !provider.hasCamera(selector)
+        ) {
+
+            showMessage(
+                "Kamera tidak tersedia"
+            )
+
             return
         }
 
         isFrontCamera = next
+
         startCamera()
     }
 
-    private fun toggleMode() {
+    private fun cycleMode() {
 
-        if (isRecording) return
+        if (isRecording) {
+            return
+        }
 
-        isVideoMode = !isVideoMode
+        when {
 
-        modeButton.text =
-            if (isVideoMode) "VIDEO" else "PHOTO"
+            !isVideoMode &&
+                !isAstroMode -> {
 
-        statusText.text =
-            if (isVideoMode) {
-                "NINJACAM • VIDEO"
-            } else {
-                "NINJACAM • PHOTO"
+                isVideoMode = true
+                isAstroMode = false
+
+                modeButton.text = "VIDEO"
+
+                statusText.text =
+                    "NINJACAM • VIDEO"
             }
+
+            isVideoMode -> {
+
+                isVideoMode = false
+                isAstroMode = true
+
+                if (isFrontCamera) {
+                    isFrontCamera = false
+                }
+
+                modeButton.text = "ASTRO"
+
+                statusText.text =
+                    "NINJACAM • ASTRO"
+
+                startCamera()
+            }
+
+            else -> {
+
+                isVideoMode = false
+                isAstroMode = false
+
+                modeButton.text = "PHOTO"
+
+                statusText.text =
+                    "NINJACAM • PHOTO"
+
+                startCamera()
+            }
+        }
 
         shutterButton.animate()
             .scaleX(0.9f)
             .scaleY(0.9f)
             .setDuration(80)
             .withEndAction {
+
                 shutterButton.animate()
                     .scaleX(1f)
                     .scaleY(1f)
@@ -516,7 +748,9 @@ class MainActivity : ComponentActivity() {
 
     private fun onShutterPressed() {
 
-        if (!isCameraReady) return
+        if (!isCameraReady) {
+            return
+        }
 
         if (isVideoMode) {
 
@@ -527,60 +761,118 @@ class MainActivity : ComponentActivity() {
             }
 
         } else {
+
             takePhoto()
         }
     }
 
     private fun takePhoto() {
 
-        val capture = imageCapture ?: return
+        val capture =
+            imageCapture ?: return
 
         shutterButton.isEnabled = false
 
-        val values = ContentValues().apply {
+        if (isAstroMode) {
 
-            put(
-                MediaStore.Images.Media.DISPLAY_NAME,
-                "NinjaCam_${System.currentTimeMillis()}.jpg"
+            showMessage(
+                "Astro exposure 4 detik…"
             )
-
-            put(
-                MediaStore.Images.Media.MIME_TYPE,
-                "image/jpeg"
-            )
-
-            if (Build.VERSION.SDK_INT >= 29) {
-                put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "Pictures/NinjaCam"
-                )
-            }
         }
 
+        val values =
+            ContentValues().apply {
+
+                put(
+                    MediaStore.Images.Media
+                        .DISPLAY_NAME,
+
+                    if (isAstroMode) {
+                        "NinjaCam_Astro_${
+                            System.currentTimeMillis()
+                        }.jpg"
+                    } else {
+                        "NinjaCam_${
+                            System.currentTimeMillis()
+                        }.jpg"
+                    }
+                )
+
+                put(
+                    MediaStore.Images.Media
+                        .MIME_TYPE,
+
+                    "image/jpeg"
+                )
+
+                if (Build.VERSION.SDK_INT >= 29) {
+
+                    put(
+                        MediaStore.Images.Media
+                            .RELATIVE_PATH,
+
+                        "Pictures/NinjaCam"
+                    )
+                }
+            }
+
         val options =
-            ImageCapture.OutputFileOptions.Builder(
-                contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                values
-            ).build()
+            ImageCapture
+                .OutputFileOptions
+                .Builder(
+                    contentResolver,
+
+                    MediaStore.Images.Media
+                        .EXTERNAL_CONTENT_URI,
+
+                    values
+                )
+                .build()
 
         capture.takePicture(
+
             options,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
+
+            ContextCompat
+                .getMainExecutor(this),
+
+            object :
+                ImageCapture
+                    .OnImageSavedCallback {
 
                 override fun onImageSaved(
-                    result: ImageCapture.OutputFileResults
+                    result:
+                    ImageCapture
+                        .OutputFileResults
                 ) {
-                    shutterButton.isEnabled = true
-                    showMessage("Foto tersimpan ✓")
+
+                    shutterButton.isEnabled =
+                        true
+
+                    showMessage(
+                        if (isAstroMode) {
+                            "Foto Astro tersimpan ✓"
+                        } else {
+                            "Foto tersimpan ✓"
+                        }
+                    )
                 }
 
                 override fun onError(
-                    exception: ImageCaptureException
+                    exception:
+                    ImageCaptureException
                 ) {
-                    shutterButton.isEnabled = true
-                    showMessage("Gagal mengambil foto")
+
+                    shutterButton.isEnabled =
+                        true
+
+                    showMessage(
+                        if (isAstroMode) {
+                            "Astro gagal mengambil foto"
+                        } else {
+                            "Gagal mengambil foto"
+                        }
+                    )
                 }
             }
         )
@@ -588,9 +880,16 @@ class MainActivity : ComponentActivity() {
 
     private fun requestAudioAndRecord() {
 
-        if (hasPermission(Manifest.permission.RECORD_AUDIO)) {
+        if (
+            hasPermission(
+                Manifest.permission.RECORD_AUDIO
+            )
+        ) {
+
             startVideoRecording(true)
+
         } else {
+
             audioPermission.launch(
                 Manifest.permission.RECORD_AUDIO
             )
@@ -601,51 +900,71 @@ class MainActivity : ComponentActivity() {
         withAudio: Boolean
     ) {
 
-        val video = videoCapture ?: return
+        val video =
+            videoCapture ?: return
 
-        val values = ContentValues().apply {
+        val values =
+            ContentValues().apply {
 
-            put(
-                MediaStore.Video.Media.DISPLAY_NAME,
-                "NinjaCam_${System.currentTimeMillis()}.mp4"
-            )
-
-            put(
-                MediaStore.Video.Media.MIME_TYPE,
-                "video/mp4"
-            )
-
-            if (Build.VERSION.SDK_INT >= 29) {
                 put(
-                    MediaStore.Video.Media.RELATIVE_PATH,
-                    "Movies/NinjaCam"
+                    MediaStore.Video.Media
+                        .DISPLAY_NAME,
+
+                    "NinjaCam_${
+                        System.currentTimeMillis()
+                    }.mp4"
                 )
+
+                put(
+                    MediaStore.Video.Media
+                        .MIME_TYPE,
+
+                    "video/mp4"
+                )
+
+                if (Build.VERSION.SDK_INT >= 29) {
+
+                    put(
+                        MediaStore.Video.Media
+                            .RELATIVE_PATH,
+
+                        "Movies/NinjaCam"
+                    )
+                }
             }
-        }
 
         val outputOptions =
-            MediaStoreOutputOptions.Builder(
-                contentResolver,
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            )
+            MediaStoreOutputOptions
+                .Builder(
+                    contentResolver,
+
+                    MediaStore.Video.Media
+                        .EXTERNAL_CONTENT_URI
+                )
                 .setContentValues(values)
                 .build()
 
         try {
 
             var pending =
-                video.output.prepareRecording(
-                    this,
-                    outputOptions
-                )
+                video.output
+                    .prepareRecording(
+                        this,
+                        outputOptions
+                    )
 
             if (withAudio) {
-                pending = pending.withAudioEnabled()
+
+                pending =
+                    pending.withAudioEnabled()
             }
 
             recording =
                 pending.start(
-                    ContextCompat.getMainExecutor(this)
+
+                    ContextCompat
+                        .getMainExecutor(this)
+
                 ) { event ->
 
                     when (event) {
@@ -653,7 +972,9 @@ class MainActivity : ComponentActivity() {
                         is VideoRecordEvent.Start -> {
 
                             isRecording = true
-                            shutterButton.text = "■"
+
+                            shutterButton.text =
+                                "■"
 
                             statusText.text =
                                 if (withAudio) {
@@ -666,17 +987,18 @@ class MainActivity : ComponentActivity() {
                         is VideoRecordEvent.Finalize -> {
 
                             isRecording = false
+
                             recording = null
 
-                            shutterButton.text = "●"
-                            statusText.text =
-                                if (isVideoMode) {
-                                    "NINJACAM • VIDEO"
-                                } else {
-                                    "NINJACAM • PHOTO"
-                                }
+                            shutterButton.text =
+                                "●"
 
-                            if (!event.hasError()) {
+                            statusText.text =
+                                "NINJACAM • VIDEO"
+
+                            if (
+                                !event.hasError()
+                            ) {
 
                                 showMessage(
                                     if (withAudio) {
@@ -698,27 +1020,38 @@ class MainActivity : ComponentActivity() {
 
         } catch (e: Exception) {
 
-            showMessage("Tidak dapat memulai rekaman")
+            showMessage(
+                "Tidak dapat memulai rekaman"
+            )
         }
     }
 
     private fun stopVideoRecording() {
+
         recording?.stop()
     }
 
     private fun updateZoomControls() {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
-        val minZoom = state.minZoomRatio
-        val maxZoom = state.maxZoomRatio
+        val minZoom =
+            state.minZoomRatio
+
+        val maxZoom =
+            state.maxZoomRatio
 
         zoomSlider.max = 1000
 
         zoomSlider.progress =
-            calculateZoomProgress(minZoom)
+            calculateZoomProgress(
+                minZoom
+            )
 
         zoomSlider.isEnabled =
             maxZoom > minZoom
@@ -730,13 +1063,19 @@ class MainActivity : ComponentActivity() {
                 minZoom
             )
 
-        for (button in quickZoomButtons) {
+        for (
+            button in quickZoomButtons
+        ) {
 
             val level =
-                when (button.text.toString()) {
+                when (
+                    button.text.toString()
+                ) {
+
                     "1×" -> 1.0f
                     "2×" -> 2.0f
                     "5×" -> 5.0f
+
                     else -> 1.0f
                 }
 
@@ -745,7 +1084,13 @@ class MainActivity : ComponentActivity() {
                 level <= maxZoom
 
             button.alpha =
-                if (button.isEnabled) 1f else 0.35f
+                if (
+                    button.isEnabled
+                ) {
+                    1f
+                } else {
+                    0.35f
+                }
         }
     }
 
@@ -754,27 +1099,40 @@ class MainActivity : ComponentActivity() {
     ) {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
         val ratio =
             state.minZoomRatio +
-                (state.maxZoomRatio - state.minZoomRatio) *
-                progress / 1000f
+                (
+                    state.maxZoomRatio -
+                        state.minZoomRatio
+                    ) *
+                progress /
+                1000f
 
         applyZoom(ratio)
     }
 
-    private fun applyQuickZoom(level: Float) {
+    private fun applyQuickZoom(
+        level: Float
+    ) {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
         if (
             level < state.minZoomRatio ||
             level > state.maxZoomRatio
         ) {
+
             showMessage(
                 String.format(
                     Locale.US,
@@ -782,6 +1140,7 @@ class MainActivity : ComponentActivity() {
                     level
                 )
             )
+
             return
         }
 
@@ -796,27 +1155,46 @@ class MainActivity : ComponentActivity() {
     ): Int {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return 0
 
         val range =
             state.maxZoomRatio -
                 state.minZoomRatio
 
-        if (range <= 0f) return 0
+        if (range <= 0f) {
+            return 0
+        }
 
         return (
             (
-                (zoom - state.minZoomRatio) /
+                (
+                    zoom -
+                        state.minZoomRatio
+                ) /
                     range
-            ) * 1000f
-        ).roundToInt().coerceIn(0, 1000)
+            ) *
+                1000f
+        )
+            .roundToInt()
+            .coerceIn(
+                0,
+                1000
+            )
     }
 
-    private fun applyZoom(ratio: Float) {
+    private fun applyZoom(
+        ratio: Float
+    ) {
 
         val state =
-            camera?.cameraInfo?.zoomState?.value
+            camera
+                ?.cameraInfo
+                ?.zoomState
+                ?.value
                 ?: return
 
         val safeRatio =
@@ -825,9 +1203,11 @@ class MainActivity : ComponentActivity() {
                 state.maxZoomRatio
             )
 
-        camera?.cameraControl?.setZoomRatio(
-            safeRatio
-        )
+        camera
+            ?.cameraControl
+            ?.setZoomRatio(
+                safeRatio
+            )
 
         zoomText.text =
             String.format(
@@ -841,6 +1221,7 @@ class MainActivity : ComponentActivity() {
             .scaleY(1.08f)
             .setDuration(70)
             .withEndAction {
+
                 zoomText.animate()
                     .scaleX(1f)
                     .scaleY(1f)
@@ -850,20 +1231,23 @@ class MainActivity : ComponentActivity() {
             .start()
     }
 
-    private fun showMessage(message: String) {
+    private fun showMessage(
+        message: String
+    ) {
 
-        android.widget.Toast.makeText(
+        Toast.makeText(
             this,
             message,
-            android.widget.Toast.LENGTH_SHORT
+            Toast.LENGTH_SHORT
         ).show()
     }
 
     override fun onDestroy() {
 
         recording?.stop()
+
         cameraProvider?.unbindAll()
 
         super.onDestroy()
     }
-}    
+}
