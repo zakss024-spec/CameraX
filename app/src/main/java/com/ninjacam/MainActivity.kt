@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -25,7 +26,15 @@ import androidx.core.content.ContextCompat
 class MainActivity : ComponentActivity() {
 
     private lateinit var previewView: PreviewView
+
     private var imageCapture: ImageCapture? = null
+    private var cameraProvider: ProcessCameraProvider? = null
+
+    private var isFrontCamera = false
+    private var isCameraReady = false
+
+    private lateinit var shutterButton: ImageButton
+    private lateinit var switchButton: ImageButton
 
     private val cameraPermission =
         registerForActivityResult(
@@ -47,19 +56,22 @@ class MainActivity : ComponentActivity() {
 
         createCameraUi()
 
-        if (
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
+        if (hasCameraPermission()) {
             startCamera()
         } else {
             cameraPermission.launch(Manifest.permission.CAMERA)
         }
     }
 
+    private fun hasCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
     private fun createCameraUi() {
+
         val root = FrameLayout(this)
 
         previewView = PreviewView(this).apply {
@@ -74,20 +86,13 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        val shutterButton = ImageButton(this).apply {
+        shutterButton = ImageButton(this).apply {
 
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
-                setStroke(5, Color.DKGRAY)
+                setStroke(5, Color.LTGRAY)
             }
-
-            setColorFilter(
-                android.graphics.PorterDuffColorFilter(
-                    Color.WHITE,
-                    android.graphics.PorterDuff.Mode.SRC_IN
-                )
-            )
 
             contentDescription = "Ambil foto"
 
@@ -96,63 +101,116 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val buttonSize = 92
-
-        val buttonParams = FrameLayout.LayoutParams(
-            buttonSize,
-            buttonSize
+        val shutterParams = FrameLayout.LayoutParams(
+            92,
+            92
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             bottomMargin = 55
         }
 
-        root.addView(shutterButton, buttonParams)
+        root.addView(shutterButton, shutterParams)
+
+        switchButton = ImageButton(this).apply {
+
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.DKGRAY)
+            }
+
+            setImageResource(
+                android.R.drawable.ic_menu_camera
+            )
+
+            setColorFilter(Color.WHITE)
+            contentDescription = "Ganti kamera"
+
+            setOnClickListener {
+                switchCamera()
+            }
+        }
+
+        val switchParams = FrameLayout.LayoutParams(
+            56,
+            56
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            bottomMargin = 73
+            marginEnd = 35
+        }
+
+        root.addView(switchButton, switchParams)
 
         setContentView(root)
     }
 
     private fun startCamera() {
 
-        val cameraProviderFuture =
-            ProcessCameraProvider.getInstance(this)
+        isCameraReady = false
+        shutterButton.isEnabled = false
 
-        cameraProviderFuture.addListener({
+        val future = ProcessCameraProvider.getInstance(this)
 
-            val cameraProvider =
-                cameraProviderFuture.get()
-
-            val preview = Preview.Builder()
-                .build()
-                .also {
-                    it.surfaceProvider =
-                        previewView.surfaceProvider
-                }
-
-            imageCapture = ImageCapture.Builder()
-                .setCaptureMode(
-                    ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
-                )
-                .build()
-
-            val cameraSelector =
-                CameraSelector.DEFAULT_BACK_CAMERA
+        future.addListener({
 
             try {
 
-                cameraProvider.unbindAll()
+                val provider = future.get()
+                cameraProvider = provider
 
-                cameraProvider.bindToLifecycle(
+                val selector = if (isFrontCamera) {
+                    CameraSelector.DEFAULT_FRONT_CAMERA
+                } else {
+                    CameraSelector.DEFAULT_BACK_CAMERA
+                }
+
+                if (!provider.hasCamera(selector)) {
+
+                    Toast.makeText(
+                        this,
+                        "Kamera tidak tersedia",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    isFrontCamera = false
+                    shutterButton.isEnabled = true
+                    return@addListener
+                }
+
+                val preview = Preview.Builder()
+                    .build()
+                    .also {
+                        it.surfaceProvider =
+                            previewView.surfaceProvider
+                    }
+
+                val capture = ImageCapture.Builder()
+                    .setCaptureMode(
+                        ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+                    )
+                    .build()
+
+                provider.unbindAll()
+
+                provider.bindToLifecycle(
                     this,
-                    cameraSelector,
+                    selector,
                     preview,
-                    imageCapture
+                    capture
                 )
+
+                imageCapture = capture
+                isCameraReady = true
+                shutterButton.isEnabled = true
 
             } catch (e: Exception) {
 
+                isCameraReady = false
+                shutterButton.isEnabled = false
+
                 Toast.makeText(
                     this,
-                    "Kamera gagal dibuka",
+                    "Gagal membuka kamera",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -160,18 +218,51 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    private fun switchCamera() {
+
+        if (!isCameraReady) return
+
+        val provider = cameraProvider ?: return
+
+        val nextCamera = !isFrontCamera
+
+        val nextSelector = if (nextCamera) {
+            CameraSelector.DEFAULT_FRONT_CAMERA
+        } else {
+            CameraSelector.DEFAULT_BACK_CAMERA
+        }
+
+        if (!provider.hasCamera(nextSelector)) {
+
+            Toast.makeText(
+                this,
+                "Kamera tidak tersedia",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            return
+        }
+
+        isFrontCamera = nextCamera
+        startCamera()
+    }
+
     private fun takePhoto() {
+
+        if (!isCameraReady) return
 
         val capture = imageCapture ?: return
 
-        val name =
+        shutterButton.isEnabled = false
+
+        val filename =
             "NinjaCam_${System.currentTimeMillis()}.jpg"
 
-        val contentValues = ContentValues().apply {
+        val values = ContentValues().apply {
 
             put(
                 MediaStore.Images.Media.DISPLAY_NAME,
-                name
+                filename
             )
 
             put(
@@ -189,7 +280,7 @@ class MainActivity : ComponentActivity() {
             ImageCapture.OutputFileOptions.Builder(
                 contentResolver,
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
+                values
             ).build()
 
         capture.takePicture(
@@ -199,13 +290,14 @@ class MainActivity : ComponentActivity() {
             object : ImageCapture.OnImageSavedCallback {
 
                 override fun onImageSaved(
-                    outputFileResults:
-                    ImageCapture.OutputFileResults
+                    result: ImageCapture.OutputFileResults
                 ) {
+
+                    shutterButton.isEnabled = true
 
                     Toast.makeText(
                         this@MainActivity,
-                        "Foto tersimpan ✓",
+                        "Foto berhasil disimpan!",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -213,6 +305,8 @@ class MainActivity : ComponentActivity() {
                 override fun onError(
                     exception: ImageCaptureException
                 ) {
+
+                    shutterButton.isEnabled = true
 
                     Toast.makeText(
                         this@MainActivity,
@@ -222,5 +316,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         )
+    }
+
+    override fun onDestroy() {
+        cameraProvider?.unbindAll()
+        super.onDestroy()
     }
 }
