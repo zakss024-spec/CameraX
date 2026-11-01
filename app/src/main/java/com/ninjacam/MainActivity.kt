@@ -3,12 +3,14 @@ package com.ninjacam
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -72,21 +74,36 @@ class MainActivity : ComponentActivity() {
             )
         )
 
-        val shutterButton = Button(this).apply {
-            text = "●"
-            textSize = 28f
+        val shutterButton = ImageButton(this).apply {
+
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+                setStroke(5, Color.DKGRAY)
+            }
+
+            setColorFilter(
+                android.graphics.PorterDuffColorFilter(
+                    Color.WHITE,
+                    android.graphics.PorterDuff.Mode.SRC_IN
+                )
+            )
+
+            contentDescription = "Ambil foto"
 
             setOnClickListener {
                 takePhoto()
             }
         }
 
+        val buttonSize = 92
+
         val buttonParams = FrameLayout.LayoutParams(
-            120,
-            120
+            buttonSize,
+            buttonSize
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            bottomMargin = 60
+            bottomMargin = 55
         }
 
         root.addView(shutterButton, buttonParams)
@@ -95,6 +112,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startCamera() {
+
         val cameraProviderFuture =
             ProcessCameraProvider.getInstance(this)
 
@@ -120,6 +138,7 @@ class MainActivity : ComponentActivity() {
                 CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
+
                 cameraProvider.unbindAll()
 
                 cameraProvider.bindToLifecycle(
@@ -130,6 +149,7 @@ class MainActivity : ComponentActivity() {
                 )
 
             } catch (e: Exception) {
+
                 Toast.makeText(
                     this,
                     "Kamera gagal dibuka",
