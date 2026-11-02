@@ -38,7 +38,6 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -156,45 +155,71 @@ class MainActivity : ComponentActivity() {
 
         rootContainer.addView(
             intro,
-            ViewGroup.LayoutParams(-1, -1)
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         )
 
+        // Cari MP4 langsung di app/src/main/assets/
+        val videoFile = try {
+            assets.list("")
+                ?.firstOrNull {
+                    it.lowercase(Locale.US).endsWith(".mp4")
+                }
+        } catch (e: Exception) {
+            null
+        }
+
         val videoView = VideoView(this).apply {
-
             setBackgroundColor(Color.BLACK)
-
-            val videoFile =
-                assets.list("")
-                    ?.firstOrNull {
-                        it.lowercase(Locale.US)
-                            .endsWith(".mp4")
-                    }
-
-            if (videoFile != null) {
-                setVideoURI(
-                    Uri.parse(
-                        "file:///android_asset/$videoFile"
-                    )
-                )
-            }
         }
 
         intro.addView(
             videoView,
             FrameLayout.LayoutParams(
-                -1,
-                -1
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
 
+        // Kalau MP4 tidak ditemukan, JANGAN masuk kamera.
+        if (videoFile == null) {
+
+            val errorText = TextView(this).apply {
+                text = "INTRO VIDEO NOT FOUND"
+                textSize = 15f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+            }
+
+            intro.addView(
+                errorText,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            )
+
+            return
+        }
+
+        videoView.setVideoURI(
+            Uri.parse(
+                "file:///android_asset/$videoFile"
+            )
+        )
+
+        // Lapisan gelap tipis
         val bottomShade = View(this).apply {
 
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(
                     Color.TRANSPARENT,
-                    Color.argb(80, 0, 0, 0),
-                    Color.argb(205, 0, 0, 0)
+                    Color.argb(45, 0, 0, 0),
+                    Color.argb(175, 0, 0, 0)
                 )
             )
         }
@@ -202,20 +227,22 @@ class MainActivity : ComponentActivity() {
         intro.addView(
             bottomShade,
             FrameLayout.LayoutParams(
-                -1,
-                390,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                350,
                 Gravity.BOTTOM
             )
         )
 
+        // =====================================================
+        // TEKS INTRO
+        // Posisi sekitar 60% tinggi layar
+        // =====================================================
+
         val textContainer =
             LinearLayout(this).apply {
 
-                orientation =
-                    LinearLayout.VERTICAL
-
-                gravity =
-                    Gravity.CENTER
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
 
                 setPadding(
                     24,
@@ -294,7 +321,7 @@ class MainActivity : ComponentActivity() {
         textContainer.addView(
             title,
             LinearLayout.LayoutParams(
-                -1,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 48
             )
         )
@@ -302,7 +329,7 @@ class MainActivity : ComponentActivity() {
         textContainer.addView(
             developer,
             LinearLayout.LayoutParams(
-                -1,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 32
             )
         )
@@ -310,21 +337,40 @@ class MainActivity : ComponentActivity() {
         textContainer.addView(
             love,
             LinearLayout.LayoutParams(
-                -1,
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 30
             )
         )
 
+        val textParams =
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                115,
+                Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            ).apply {
+
+                topMargin =
+                    (
+                        resources.displayMetrics.heightPixels *
+                            0.60f
+                        ).roundToInt()
+            }
+
         intro.addView(
             textContainer,
-            FrameLayout.LayoutParams(
-                -1,
-                135,
-                Gravity.BOTTOM
-            ).apply {
-                bottomMargin = 125
-            }
+            textParams
         )
+
+        // Animasi teks masuk
+        textContainer.animate()
+            .alpha(1f)
+            .setDuration(800L)
+            .setStartDelay(250L)
+            .start()
+
+        // =====================================================
+        // PERCENTAGE
+        // =====================================================
 
         val progressText =
             TextView(this).apply {
@@ -354,6 +400,10 @@ class MainActivity : ComponentActivity() {
                 bottomMargin = 75
             }
         )
+
+        // =====================================================
+        // PROGRESS BAR
+        // =====================================================
 
         val progressBackground =
             View(this).apply {
@@ -407,30 +457,50 @@ class MainActivity : ComponentActivity() {
             }
         )
 
-        textContainer.animate()
-            .alpha(1f)
-            .setDuration(900L)
-            .setStartDelay(350L)
-            .start()
+        // =====================================================
+        // VIDEO PREPARED
+        // =====================================================
 
         videoView.setOnPreparedListener { mediaPlayer ->
+
+            mediaPlayer.isLooping = false
+
+            // Pastikan suara video intro aktif
+            mediaPlayer.setVolume(
+                1.0f,
+                1.0f
+            )
 
             val duration =
                 mediaPlayer.duration.toLong()
 
             if (duration <= 0L) {
+
+                progressText.text =
+                    "VIDEO ERROR"
+
                 return@setOnPreparedListener
             }
 
+            // Mulai video
             videoView.start()
 
             val handler =
-                Handler(Looper.getMainLooper())
+                Handler(
+                    Looper.getMainLooper()
+                )
 
             val updateProgress =
                 object : Runnable {
 
                     override fun run() {
+
+                        if (
+                            isFinishing ||
+                            isDestroyed
+                        ) {
+                            return
+                        }
 
                         val position =
                             videoView.currentPosition
@@ -439,8 +509,8 @@ class MainActivity : ComponentActivity() {
                         val percentage =
                             (
                                 position.toDouble() /
-                                    duration.toDouble()
-                                * 100.0
+                                    duration.toDouble() *
+                                    100.0
                             )
                                 .roundToInt()
                                 .coerceIn(
@@ -454,7 +524,11 @@ class MainActivity : ComponentActivity() {
                         progressBar.scaleX =
                             percentage / 100f
 
-                        if (percentage < 100) {
+                        if (
+                            videoView.isPlaying &&
+                            percentage < 100
+                        ) {
+
                             handler.postDelayed(
                                 this,
                                 50L
@@ -466,35 +540,33 @@ class MainActivity : ComponentActivity() {
             handler.post(updateProgress)
         }
 
+        // =====================================================
+        // VIDEO ERROR
+        // =====================================================
+
         videoView.setOnErrorListener {
                 _, _, _ ->
 
-            progressText.text = "100%"
-            progressBar.scaleX = 1f
+            // PENTING:
+            // Jangan panggil continueToCamera().
+            // Jadi intro tidak akan diam-diam ke-skip.
 
-            Handler(
-                Looper.getMainLooper()
-            ).postDelayed({
+            progressText.text =
+                "INTRO VIDEO ERROR"
 
-                if (
-                    !isFinishing &&
-                    !isDestroyed
-                ) {
-
-                    rootContainer
-                        .removeView(intro)
-
-                    continueToCamera()
-                }
-
-            }, 500L)
+            progressBar.scaleX = 0f
 
             true
         }
 
+        // =====================================================
+        // VIDEO SELESAI
+        // =====================================================
+
         videoView.setOnCompletionListener {
 
-            progressText.text = "100%"
+            progressText.text =
+                "100%"
 
             progressBar.animate()
                 .scaleX(1f)
@@ -541,8 +613,9 @@ class MainActivity : ComponentActivity() {
 
                             videoView.stopPlayback()
 
-                            rootContainer
-                                .removeView(intro)
+                            rootContainer.removeView(
+                                intro
+                            )
 
                             continueToCamera()
                         }
@@ -589,7 +662,8 @@ class MainActivity : ComponentActivity() {
 
     private fun createCameraUi() {
 
-        rootContainer = FrameLayout(this)
+        rootContainer =
+            FrameLayout(this)
 
         rootContainer.setBackgroundColor(
             Color.BLACK
@@ -637,7 +711,8 @@ class MainActivity : ComponentActivity() {
                     }
 
                 alpha = 0f
-                visibility = View.INVISIBLE
+                visibility =
+                    View.INVISIBLE
             }
 
         rootContainer.addView(
@@ -715,7 +790,8 @@ class MainActivity : ComponentActivity() {
         hdrButton =
             topButton("HDR") {
 
-                hdrEnabled = !hdrEnabled
+                hdrEnabled =
+                    !hdrEnabled
 
                 hdrButton.text =
                     if (hdrEnabled) {
@@ -724,7 +800,9 @@ class MainActivity : ComponentActivity() {
                         "HDR"
                     }
 
-                animateButton(hdrButton)
+                animateButton(
+                    hdrButton
+                )
 
                 showMessage(
                     if (hdrEnabled) {
@@ -1178,7 +1256,9 @@ class MainActivity : ComponentActivity() {
             modeButtons[mode] =
                 button
 
-            modeRow.addView(button)
+            modeRow.addView(
+                button
+            )
         }
 
         bottomPanel.addView(
@@ -1622,7 +1702,9 @@ class MainActivity : ComponentActivity() {
 
                         animateButton(this)
 
-                        applyQuickZoom(level)
+                        applyQuickZoom(
+                            level
+                        )
                     }
                 }
 
@@ -1682,7 +1764,9 @@ class MainActivity : ComponentActivity() {
                     }
 
                 if (
-                    !provider.hasCamera(selector)
+                    !provider.hasCamera(
+                        selector
+                    )
                 ) {
 
                     showMessage(
@@ -1914,7 +1998,9 @@ class MainActivity : ComponentActivity() {
             cameraProvider ?: return
 
         if (
-            !provider.hasCamera(selector)
+            !provider.hasCamera(
+                selector
+            )
         ) {
 
             showMessage(
@@ -1973,7 +2059,9 @@ class MainActivity : ComponentActivity() {
                     "⚡ OFF"
             }
 
-        animateButton(flashButton)
+        animateButton(
+            flashButton
+        )
 
         if (isCameraReady) {
             restartCameraSafely()
@@ -2002,7 +2090,9 @@ class MainActivity : ComponentActivity() {
                     "⏱ ${timerSeconds}s"
             }
 
-        animateButton(timerButton)
+        animateButton(
+            timerButton
+        )
     }
 
     // =========================================================
@@ -2366,7 +2456,9 @@ class MainActivity : ComponentActivity() {
             state.zoomRatio
 
         zoomSlider.progress =
-            calculateZoomProgress(currentZoom)
+            calculateZoomProgress(
+                currentZoom
+            )
 
         zoomSlider.isEnabled =
             maxZoom > minZoom
@@ -2524,7 +2616,9 @@ class MainActivity : ComponentActivity() {
 
         camera
             ?.cameraControl
-            ?.setZoomRatio(safeRatio)
+            ?.setZoomRatio(
+                safeRatio
+            )
 
         zoomText.text =
             String.format(
