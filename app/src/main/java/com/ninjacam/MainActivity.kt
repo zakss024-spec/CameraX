@@ -8,6 +8,7 @@ import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -18,7 +19,6 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
@@ -27,6 +27,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.VideoView
 
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +38,7 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -134,520 +136,399 @@ class MainActivity : ComponentActivity() {
     }
 
     // =========================================================
-    // LOADING SCREEN
+    // VIDEO INTRO
     // =========================================================
 
     private fun showLoadingScreen() {
 
-        val loading = FrameLayout(this).apply {
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+
+        val intro = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 1f
         }
 
         rootContainer.addView(
-            loading,
+            intro,
             ViewGroup.LayoutParams(-1, -1)
         )
 
-        val glow = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.argb(35, 150, 70, 255))
-            }
-            alpha = 0f
-            scaleX = 0.35f
-            scaleY = 0.35f
-        }
+        val videoView = VideoView(this).apply {
 
-        loading.addView(
-            glow,
-            FrameLayout.LayoutParams(
-                310,
-                310,
-                Gravity.CENTER
-            )
-        )
+            setBackgroundColor(Color.BLACK)
 
-        val logo = TextView(this).apply {
-            text = "🥷"
-            textSize = 76f
-            gravity = Gravity.CENTER
-            alpha = 0f
-            scaleX = 0.65f
-            scaleY = 0.65f
+            val videoFile =
+                assets.list("")
+                    ?.firstOrNull {
+                        it.lowercase(Locale.US)
+                            .endsWith(".mp4")
+                    }
 
-            setShadowLayer(
-                25f,
-                0f,
-                0f,
-                Color.rgb(145, 70, 255)
-            )
-        }
-
-        loading.addView(
-            logo,
-            FrameLayout.LayoutParams(
-                190,
-                190,
-                Gravity.CENTER
-            ).apply {
-                bottomMargin = 150
-            }
-        )
-
-        val title = TextView(this).apply {
-            text = "NinjaCam"
-            textSize = 38f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-
-            typeface = android.graphics.Typeface.create(
-                "sans-serif",
-                android.graphics.Typeface.BOLD
-            )
-
-            alpha = 0f
-            scaleX = 0.8f
-            scaleY = 0.8f
-
-            setShadowLayer(
-                16f,
-                0f,
-                0f,
-                Color.rgb(150, 75, 255)
-            )
-        }
-
-        loading.addView(
-            title,
-            FrameLayout.LayoutParams(
-                -1,
-                75,
-                Gravity.CENTER
-            ).apply {
-                topMargin = 115
-            }
-        )
-
-        val developer = TextView(this).apply {
-            text = "Developer: ZackssX"
-            textSize = 14f
-            gravity = Gravity.CENTER
-
-            setTextColor(
-                Color.argb(
-                    225,
-                    255,
-                    255,
-                    255
-                )
-            )
-
-            alpha = 0f
-        }
-
-        loading.addView(
-            developer,
-            FrameLayout.LayoutParams(
-                -1,
-                40,
-                Gravity.CENTER
-            ).apply {
-                topMargin = 215
-            }
-        )
-
-        val love = TextView(this).apply {
-            text = "Fahiraa My Loveee"
-            textSize = 12f
-            gravity = Gravity.CENTER
-
-            setTextColor(
-                Color.argb(
-                    160,
-                    255,
-                    255,
-                    255
-                )
-            )
-
-            alpha = 0f
-        }
-
-        loading.addView(
-            love,
-            FrameLayout.LayoutParams(
-                -1,
-                35,
-                Gravity.CENTER
-            ).apply {
-                topMargin = 255
-            }
-        )
-
-        val loadingText = TextView(this).apply {
-            text = "Preparing camera"
-            textSize = 11f
-            gravity = Gravity.CENTER
-
-            setTextColor(
-                Color.argb(
-                    130,
-                    255,
-                    255,
-                    255
-                )
-            )
-
-            alpha = 0f
-        }
-
-        loading.addView(
-            loadingText,
-            FrameLayout.LayoutParams(
-                -1,
-                30,
-                Gravity.BOTTOM
-            ).apply {
-                bottomMargin = 85
-            }
-        )
-
-        val progressBackground = View(this).apply {
-            background = roundBackground(
-                Color.argb(
-                    45,
-                    255,
-                    255,
-                    255
-                ),
-                999f
-            )
-        }
-
-        loading.addView(
-            progressBackground,
-            FrameLayout.LayoutParams(
-                180,
-                3,
-                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            ).apply {
-                bottomMargin = 62
-            }
-        )
-
-        val progress = View(this).apply {
-            background = roundBackground(
-                Color.WHITE,
-                999f
-            )
-
-            scaleX = 0f
-            pivotX = 0f
-        }
-
-        loading.addView(
-            progress,
-            FrameLayout.LayoutParams(
-                180,
-                3,
-                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            ).apply {
-                bottomMargin = 62
-            }
-        )
-
-        Handler(Looper.getMainLooper()).postDelayed({
-
-            animateIn(logo, 500L)
-            animateIn(title, 650L)
-
-            fadeIn(
-                developer,
-                850L
-            )
-
-            fadeIn(
-                love,
-                1050L
-            )
-
-            fadeIn(
-                loadingText,
-                1250L
-            )
-
-            AnimatorSet().apply {
-
-                playTogether(
-                    ObjectAnimator.ofFloat(
-                        glow,
-                        View.ALPHA,
-                        0f,
-                        1f
-                    ),
-                    ObjectAnimator.ofFloat(
-                        glow,
-                        View.SCALE_X,
-                        0.35f,
-                        1f
-                    ),
-                    ObjectAnimator.ofFloat(
-                        glow,
-                        View.SCALE_Y,
-                        0.35f,
-                        1f
+            if (videoFile != null) {
+                setVideoURI(
+                    Uri.parse(
+                        "file:///android_asset/$videoFile"
                     )
                 )
-
-                duration = 1000L
-                interpolator = DecelerateInterpolator()
-                start()
             }
-
-        }, 150L)
-
-        ObjectAnimator.ofFloat(
-            progress,
-            View.SCALE_X,
-            0f,
-            1f
-        ).apply {
-
-            duration = 8500L
-            startDelay = 600L
-            interpolator = AccelerateDecelerateInterpolator()
-            start()
         }
 
-        val glowPulse =
-            ObjectAnimator.ofFloat(
-                glow,
-                View.ALPHA,
-                0.45f,
-                0.9f,
-                0.45f
-            ).apply {
-                duration = 1800L
-                repeatCount = 4
-                repeatMode = ObjectAnimator.REVERSE
-            }
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            glowPulse.start()
-        }, 1200L)
-
-        createLoadingFlash(
-            loading,
-            1800L,
-            220L
-        )
-
-        createLoadingFlash(
-            loading,
-            4300L,
-            220L
-        )
-
-        createLoadingFlash(
-            loading,
-            6900L,
-            250L
-        )
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            loadingText.text = "Optimizing camera"
-        }, 3000L)
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            loadingText.text = "Checking camera hardware"
-        }, 5600L)
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            loadingText.text = "Starting NinjaCam"
-        }, 7800L)
-
-        Handler(Looper.getMainLooper()).postDelayed({
-
-            if (
-                isFinishing ||
-                isDestroyed
-            ) {
-                return@postDelayed
-            }
-
-            val fade =
-                ObjectAnimator.ofFloat(
-                    loading,
-                    View.ALPHA,
-                    1f,
-                    0f
-                ).apply {
-                    duration = 650L
-                    interpolator = DecelerateInterpolator()
-                }
-
-            fade.addListener(
-                object : Animator.AnimatorListener {
-
-                    override fun onAnimationStart(
-                        animation: Animator
-                    ) {
-                    }
-
-                    override fun onAnimationEnd(
-                        animation: Animator
-                    ) {
-
-                        rootContainer.removeView(
-                            loading
-                        )
-
-                        continueToCamera()
-                    }
-
-                    override fun onAnimationCancel(
-                        animation: Animator
-                    ) {
-                    }
-
-                    override fun onAnimationRepeat(
-                        animation: Animator
-                    ) {
-                    }
-                }
+        intro.addView(
+            videoView,
+            FrameLayout.LayoutParams(
+                -1,
+                -1
             )
+        )
 
-            fade.start()
+        val bottomShade = View(this).apply {
 
-        }, 9350L)
-    }
-
-    private fun animateIn(
-        view: View,
-        duration: Long
-    ) {
-
-        AnimatorSet().apply {
-
-            playTogether(
-                ObjectAnimator.ofFloat(
-                    view,
-                    View.ALPHA,
-                    0f,
-                    1f
-                ),
-                ObjectAnimator.ofFloat(
-                    view,
-                    View.SCALE_X,
-                    0.65f,
-                    1f
-                ),
-                ObjectAnimator.ofFloat(
-                    view,
-                    View.SCALE_Y,
-                    0.65f,
-                    1f
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(
+                    Color.TRANSPARENT,
+                    Color.argb(80, 0, 0, 0),
+                    Color.argb(205, 0, 0, 0)
                 )
             )
-
-            this.duration = duration
-            interpolator = DecelerateInterpolator()
-            start()
         }
-    }
 
-    private fun fadeIn(
-        view: View,
-        delay: Long
-    ) {
+        intro.addView(
+            bottomShade,
+            FrameLayout.LayoutParams(
+                -1,
+                390,
+                Gravity.BOTTOM
+            )
+        )
 
-        Handler(Looper.getMainLooper()).postDelayed({
+        val textContainer =
+            LinearLayout(this).apply {
 
-            ObjectAnimator.ofFloat(
-                view,
-                View.ALPHA,
-                0f,
-                1f
-            ).apply {
-                duration = 450L
-                start()
-            }
+                orientation =
+                    LinearLayout.VERTICAL
 
-        }, delay)
-    }
+                gravity =
+                    Gravity.CENTER
 
-    private fun createLoadingFlash(
-        parent: FrameLayout,
-        delay: Long,
-        duration: Long
-    ) {
-
-        Handler(Looper.getMainLooper()).postDelayed({
-
-            if (
-                isFinishing ||
-                isDestroyed
-            ) {
-                return@postDelayed
-            }
-
-            val flash = View(this).apply {
-
-                background =
-                    GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(Color.WHITE)
-                    }
+                setPadding(
+                    24,
+                    0,
+                    24,
+                    0
+                )
 
                 alpha = 0f
-                scaleX = 0.03f
-                scaleY = 0.03f
             }
 
-            val size =
-                resources.displayMetrics.widthPixels * 2
+        val title =
+            TextView(this).apply {
 
-            parent.addView(
-                flash,
-                FrameLayout.LayoutParams(
-                    size,
-                    size,
-                    Gravity.CENTER
+                text = "NinjaCamera"
+                textSize = 30f
+                gravity = Gravity.CENTER
+
+                setTextColor(Color.WHITE)
+
+                typeface =
+                    android.graphics.Typeface.create(
+                        "sans-serif",
+                        android.graphics.Typeface.BOLD
+                    )
+
+                setShadowLayer(
+                    14f,
+                    0f,
+                    2f,
+                    Color.BLACK
                 )
-            )
+            }
 
-            AnimatorSet().apply {
+        val developer =
+            TextView(this).apply {
 
-                playTogether(
-                    ObjectAnimator.ofFloat(
-                        flash,
-                        View.ALPHA,
-                        0f,
-                        0.65f,
-                        0f
-                    ),
-                    ObjectAnimator.ofFloat(
-                        flash,
-                        View.SCALE_X,
-                        0.03f,
-                        0.6f,
-                        1.15f
-                    ),
-                    ObjectAnimator.ofFloat(
-                        flash,
-                        View.SCALE_Y,
-                        0.03f,
-                        0.6f,
-                        1.15f
+                text = "Developer:Zackss"
+                textSize = 15f
+                gravity = Gravity.CENTER
+
+                setTextColor(Color.WHITE)
+
+                setShadowLayer(
+                    8f,
+                    0f,
+                    1f,
+                    Color.BLACK
+                )
+            }
+
+        val love =
+            TextView(this).apply {
+
+                text = "Fahiraa My Loveee"
+                textSize = 13f
+                gravity = Gravity.CENTER
+
+                setTextColor(
+                    Color.argb(
+                        215,
+                        255,
+                        255,
+                        255
                     )
                 )
 
-                this.duration = duration
-                interpolator = AccelerateDecelerateInterpolator()
+                setShadowLayer(
+                    7f,
+                    0f,
+                    1f,
+                    Color.BLACK
+                )
+            }
 
-                addListener(
-                    object : Animator.AnimatorListener {
+        textContainer.addView(
+            title,
+            LinearLayout.LayoutParams(
+                -1,
+                48
+            )
+        )
+
+        textContainer.addView(
+            developer,
+            LinearLayout.LayoutParams(
+                -1,
+                32
+            )
+        )
+
+        textContainer.addView(
+            love,
+            LinearLayout.LayoutParams(
+                -1,
+                30
+            )
+        )
+
+        intro.addView(
+            textContainer,
+            FrameLayout.LayoutParams(
+                -1,
+                135,
+                Gravity.BOTTOM
+            ).apply {
+                bottomMargin = 125
+            }
+        )
+
+        val progressText =
+            TextView(this).apply {
+
+                text = "0%"
+                textSize = 12f
+                gravity = Gravity.CENTER
+
+                setTextColor(Color.WHITE)
+
+                setShadowLayer(
+                    7f,
+                    0f,
+                    1f,
+                    Color.BLACK
+                )
+            }
+
+        intro.addView(
+            progressText,
+            FrameLayout.LayoutParams(
+                80,
+                32,
+                Gravity.BOTTOM or
+                    Gravity.CENTER_HORIZONTAL
+            ).apply {
+                bottomMargin = 75
+            }
+        )
+
+        val progressBackground =
+            View(this).apply {
+
+                background =
+                    roundBackground(
+                        Color.argb(
+                            80,
+                            255,
+                            255,
+                            255
+                        ),
+                        999f
+                    )
+            }
+
+        intro.addView(
+            progressBackground,
+            FrameLayout.LayoutParams(
+                210,
+                4,
+                Gravity.BOTTOM or
+                    Gravity.CENTER_HORIZONTAL
+            ).apply {
+                bottomMargin = 60
+            }
+        )
+
+        val progressBar =
+            View(this).apply {
+
+                background =
+                    roundBackground(
+                        Color.WHITE,
+                        999f
+                    )
+
+                scaleX = 0f
+                pivotX = 0f
+            }
+
+        intro.addView(
+            progressBar,
+            FrameLayout.LayoutParams(
+                210,
+                4,
+                Gravity.BOTTOM or
+                    Gravity.CENTER_HORIZONTAL
+            ).apply {
+                bottomMargin = 60
+            }
+        )
+
+        textContainer.animate()
+            .alpha(1f)
+            .setDuration(900L)
+            .setStartDelay(350L)
+            .start()
+
+        videoView.setOnPreparedListener { mediaPlayer ->
+
+            val duration =
+                mediaPlayer.duration.toLong()
+
+            if (duration <= 0L) {
+                return@setOnPreparedListener
+            }
+
+            videoView.start()
+
+            val handler =
+                Handler(Looper.getMainLooper())
+
+            val updateProgress =
+                object : Runnable {
+
+                    override fun run() {
+
+                        val position =
+                            videoView.currentPosition
+                                .toLong()
+
+                        val percentage =
+                            (
+                                position.toDouble() /
+                                    duration.toDouble()
+                                * 100.0
+                            )
+                                .roundToInt()
+                                .coerceIn(
+                                    0,
+                                    100
+                                )
+
+                        progressText.text =
+                            "$percentage%"
+
+                        progressBar.scaleX =
+                            percentage / 100f
+
+                        if (percentage < 100) {
+                            handler.postDelayed(
+                                this,
+                                50L
+                            )
+                        }
+                    }
+                }
+
+            handler.post(updateProgress)
+        }
+
+        videoView.setOnErrorListener {
+                _, _, _ ->
+
+            progressText.text = "100%"
+            progressBar.scaleX = 1f
+
+            Handler(
+                Looper.getMainLooper()
+            ).postDelayed({
+
+                if (
+                    !isFinishing &&
+                    !isDestroyed
+                ) {
+
+                    rootContainer
+                        .removeView(intro)
+
+                    continueToCamera()
+                }
+
+            }, 500L)
+
+            true
+        }
+
+        videoView.setOnCompletionListener {
+
+            progressText.text = "100%"
+
+            progressBar.animate()
+                .scaleX(1f)
+                .setDuration(180L)
+                .start()
+
+            Handler(
+                Looper.getMainLooper()
+            ).postDelayed({
+
+                if (
+                    isFinishing ||
+                    isDestroyed
+                ) {
+                    return@postDelayed
+                }
+
+                val fade =
+                    ObjectAnimator.ofFloat(
+                        intro,
+                        View.ALPHA,
+                        1f,
+                        0f
+                    ).apply {
+
+                        duration = 650L
+
+                        interpolator =
+                            DecelerateInterpolator()
+                    }
+
+                fade.addListener(
+                    object :
+                        Animator.AnimatorListener {
 
                         override fun onAnimationStart(
                             animation: Animator
@@ -657,13 +538,18 @@ class MainActivity : ComponentActivity() {
                         override fun onAnimationEnd(
                             animation: Animator
                         ) {
-                            parent.removeView(flash)
+
+                            videoView.stopPlayback()
+
+                            rootContainer
+                                .removeView(intro)
+
+                            continueToCamera()
                         }
 
                         override fun onAnimationCancel(
                             animation: Animator
                         ) {
-                            parent.removeView(flash)
                         }
 
                         override fun onAnimationRepeat(
@@ -673,13 +559,16 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
-                start()
-            }
+                fade.start()
 
-        }, delay)
+            }, 350L)
+        }
     }
 
     private fun continueToCamera() {
+
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
 
         if (
             hasPermission(
@@ -938,7 +827,8 @@ class MainActivity : ComponentActivity() {
             FrameLayout.LayoutParams(
                 70,
                 38,
-                Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                Gravity.TOP or
+                    Gravity.CENTER_HORIZONTAL
             ).apply {
                 topMargin = 100
             }
@@ -977,7 +867,8 @@ class MainActivity : ComponentActivity() {
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 43,
-                Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                Gravity.CENTER_HORIZONTAL or
+                    Gravity.BOTTOM
             ).apply {
                 bottomMargin = 365
             }
@@ -1003,7 +894,9 @@ class MainActivity : ComponentActivity() {
                         ) {
 
                             if (fromUser) {
-                                applySliderZoom(progress)
+                                applySliderZoom(
+                                    progress
+                                )
                             }
                         }
 
@@ -1025,7 +918,8 @@ class MainActivity : ComponentActivity() {
             FrameLayout.LayoutParams(
                 180,
                 35,
-                Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                Gravity.CENTER_HORIZONTAL or
+                    Gravity.BOTTOM
             ).apply {
                 bottomMargin = 325
             }
@@ -1062,10 +956,6 @@ class MainActivity : ComponentActivity() {
                             )
                         )
 
-                        // FIX:
-                        // cornerRadii = ... menyebabkan
-                        // Unresolved reference.
-                        // Gunakan method resmi GradientDrawable.
                         setCornerRadii(
                             floatArrayOf(
                                 34f, 34f,
@@ -1118,7 +1008,8 @@ class MainActivity : ComponentActivity() {
             FrameLayout.LayoutParams(
                 58,
                 58,
-                Gravity.START or Gravity.CENTER_VERTICAL
+                Gravity.START or
+                    Gravity.CENTER_VERTICAL
             ).apply {
                 leftMargin = 8
             }
@@ -1197,7 +1088,8 @@ class MainActivity : ComponentActivity() {
             FrameLayout.LayoutParams(
                 58,
                 58,
-                Gravity.END or Gravity.CENTER_VERTICAL
+                Gravity.END or
+                    Gravity.CENTER_VERTICAL
             ).apply {
                 rightMargin = 8
             }
@@ -1423,7 +1315,9 @@ class MainActivity : ComponentActivity() {
             )
 
             duration = 750L
-            interpolator = DecelerateInterpolator()
+            interpolator =
+                DecelerateInterpolator()
+
             start()
         }
     }
@@ -2203,7 +2097,8 @@ class MainActivity : ComponentActivity() {
             duration = 220L
 
             addListener(
-                object : Animator.AnimatorListener {
+                object :
+                    Animator.AnimatorListener {
 
                     override fun onAnimationStart(
                         animation: Animator
