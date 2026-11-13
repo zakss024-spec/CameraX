@@ -86,6 +86,8 @@ class MainActivity : ComponentActivity() {
     private var isFrontCamera = false
     private var isVideoMode = false
     private var isAstroMode = false
+    private var isLivePhotoEnabled = false
+    private var livePhotoRecording: Recording? = null
     private var isCameraReady = false
     private var isRecording = false
     private var isStartingCamera = false
@@ -1244,10 +1246,15 @@ class MainActivity : ComponentActivity() {
                                 "Pro Controls sedang disiapkan"
                             )
 
-                        "LIVE" ->
-                            showMessage(
-                                "Live Photo sedang disiapkan"
-                            )
+                        "LIVE" -> {
+                            if (isRecording || livePhotoRecording != null) return@modeChip
+                            isVideoMode = false
+                            isAstroMode = false
+                            isLivePhotoEnabled = !isLivePhotoEnabled
+                            statusText.text = if (isLivePhotoEnabled) "NINJACAM • LIVE PHOTO ON" else "NINJACAM • PHOTO"
+                            updateModeUi(if (isLivePhotoEnabled) "LIVE" else "PHOTO")
+                            showMessage(if (isLivePhotoEnabled) "Live Photo aktif • foto + klip singkat" else "Live Photo dimatikan")
+                        }
                     }
                 }
 
@@ -2141,7 +2148,52 @@ class MainActivity : ComponentActivity() {
     // PHOTO
     // =========================================================
 
+    private fun startLivePhotoClip() {
+
+        val video = videoCapture ?: return
+        if (livePhotoRecording != null || isRecording) return
+
+        val stamp = System.currentTimeMillis()
+        val values = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, "NinjaCam_Live_$stamp.mp4")
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            if (Build.VERSION.SDK_INT >= 29) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/NinjaCam/Live Photos")
+            }
+        }
+        val output = MediaStoreOutputOptions.Builder(
+            contentResolver,
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        ).setContentValues(values).build()
+
+        try {
+            livePhotoRecording = video.output
+                .prepareRecording(this, output)
+                .start(ContextCompat.getMainExecutor(this)) { event ->
+                    when (event) {
+                        is VideoRecordEvent.Start -> showMessage("Live Photo • merekam momen…")
+                        is VideoRecordEvent.Finalize -> {
+                            livePhotoRecording = null
+                            if (event.hasError()) {
+                                showMessage("Klip Live Photo gagal disimpan")
+                            } else {
+                                showMessage("Klip Live Photo tersimpan ✓")
+                            }
+                        }
+                    }
+                }
+            Handler(Looper.getMainLooper()).postDelayed({
+                livePhotoRecording?.stop()
+            }, 2500L)
+        } catch (_: Exception) {
+            livePhotoRecording = null
+            showMessage("Live Photo tidak tersedia pada sesi kamera ini")
+        }
+    }
+
     private fun takePhoto() {
+
+        if (isLivePhotoEnabled) startLivePhotoClip()
 
         val capture =
             imageCapture ?: return
@@ -2644,6 +2696,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
 
         recording?.stop()
+        livePhotoRecording?.stop()
 
         cameraProvider?.unbindAll()
 
