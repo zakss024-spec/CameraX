@@ -1901,6 +1901,7 @@ class MainActivity : ComponentActivity() {
 
         if (isRecording) return
 
+        isLivePhotoEnabled = false
         isVideoMode = false
         isAstroMode = false
 
@@ -1916,6 +1917,7 @@ class MainActivity : ComponentActivity() {
 
         if (isRecording) return
 
+        isLivePhotoEnabled = false
         isVideoMode = true
         isAstroMode = false
 
@@ -1935,6 +1937,7 @@ class MainActivity : ComponentActivity() {
             isFrontCamera = false
         }
 
+        isLivePhotoEnabled = false
         isVideoMode = false
         isAstroMode = true
 
