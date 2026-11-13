@@ -280,7 +280,7 @@ class MainActivity : ComponentActivity() {
         val developer =
             TextView(this).apply {
 
-                text = "Developer:Zackss"
+                text = "Developer:ZackssX"
                 textSize = 15f
                 gravity = Gravity.CENTER
 
@@ -597,7 +597,6 @@ class MainActivity : ComponentActivity() {
                         interpolator =
                             DecelerateInterpolator()
                     }
-
                 fade.addListener(
                     object :
                         Animator.AnimatorListener {
@@ -1198,7 +1197,6 @@ class MainActivity : ComponentActivity() {
 
                 orientation =
                     LinearLayout.HORIZONTAL
-
                 gravity =
                     Gravity.CENTER
 
@@ -1798,7 +1796,6 @@ class MainActivity : ComponentActivity() {
                     isAstroMode &&
                     !isFrontCamera
                 ) {
-
                     try {
 
                         val extender =
@@ -2397,7 +2394,6 @@ class MainActivity : ComponentActivity() {
 
                             statusText.text =
                                 "NINJACAM • VIDEO"
-
                             if (!event.hasError()) {
 
                                 showMessage(
