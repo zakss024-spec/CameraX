@@ -1017,10 +1017,10 @@ class MainActivity : ComponentActivity() {
                 )
 
                 background = glassBackground(34f, 118).apply {
-                    cornerRadii = floatArrayOf(
+                    setCornerRadii(floatArrayOf(
                         34f, 34f, 34f, 34f,
                         34f, 34f, 34f, 34f
-                    )
+                    ))
                 }
                 elevation = 12f
             }
