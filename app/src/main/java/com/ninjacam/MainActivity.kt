@@ -749,6 +749,8 @@ class MainActivity : ComponentActivity() {
                     14,
                     8
                 )
+                background = glassBackground(26f, 92)
+                elevation = 8f
             }
 
         statusText =
@@ -929,16 +931,7 @@ class MainActivity : ComponentActivity() {
                     3
                 )
 
-                background =
-                    roundBackground(
-                        Color.argb(
-                            75,
-                            0,
-                            0,
-                            0
-                        ),
-                        999f
-                    )
+                background = glassBackground(999f, 88)
             }
 
         rootContainer.addView(
@@ -1023,27 +1016,13 @@ class MainActivity : ComponentActivity() {
                     12
                 )
 
-                background =
-                    GradientDrawable().apply {
-
-                        setColor(
-                            Color.argb(
-                                105,
-                                0,
-                                0,
-                                0
-                            )
-                        )
-
-                        setCornerRadii(
-                            floatArrayOf(
-                                34f, 34f,
-                                34f, 34f,
-                                0f, 0f,
-                                0f, 0f
-                            )
-                        )
-                    }
+                background = glassBackground(34f, 118).apply {
+                    cornerRadii = floatArrayOf(
+                        34f, 34f, 34f, 34f,
+                        34f, 34f, 34f, 34f
+                    )
+                }
+                elevation = 12f
             }
 
         createModeRow()
@@ -1614,6 +1593,22 @@ class MainActivity : ComponentActivity() {
                     .start()
             }
             .start()
+    }
+
+    private fun glassBackground(
+        radius: Float,
+        alpha: Int = 105
+    ): GradientDrawable {
+        return GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                Color.argb(alpha, 48, 58, 66),
+                Color.argb((alpha * 0.72f).toInt(), 12, 18, 23)
+            )
+        ).apply {
+            cornerRadius = radius
+            setStroke(1, Color.argb(72, 255, 255, 255))
+        }
     }
 
     private fun roundBackground(
